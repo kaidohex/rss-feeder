@@ -30,6 +30,14 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import {
   EMPTY_FEED_SETTINGS,
@@ -224,6 +232,15 @@ function Reader() {
     return () => media.removeEventListener("change", handleChange);
   }, []);
 
+  const chooseCategory = (value: string) => {
+    if (value === "__create__") {
+      setEditingFeedId(null);
+      setSettingsOpen(true);
+      return;
+    }
+    setSelectedCategory(value);
+  };
+
   const toggleTheme = () => {
     const nextTheme = theme === "light" ? "dark" : "light";
     setTheme(nextTheme);
@@ -348,29 +365,28 @@ function Reader() {
       <div className="workspace">
         <aside className="sidebar">
           <div className="sidebar-label">YOUR LIBRARY</div>
-          <nav className="category-list" aria-label="Feed categories">
-            {categories.map((category) => {
-              const count =
-                category === "All stories"
-                  ? libraryArticles.length
-                  : libraryArticles.filter((article) => article.category === category).length;
-              return (
-                <button
-                  key={category}
-                  className={cn(
-                    "category-tab",
-                    selectedCategory === category && "category-tab-active",
-                  )}
-                  onClick={() => setSelectedCategory(category)}
-                  aria-current={selectedCategory === category ? "page" : undefined}
-                >
-                  <span className="category-dot" /> <span>{category}</span>
-                  <span className="category-count">{count || "—"}</span>
-                </button>
-              );
-            })}
-          </nav>
-
+          <div className="category-list-select">
+            <Select value={selectedCategory} onValueChange={chooseCategory}>
+              <SelectTrigger
+                aria-label="Choose a category"
+                className="h-9 w-full bg-card text-foreground"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="All stories">All stories</SelectItem>
+                {categories
+                  .filter((category) => category !== "All stories")
+                  .map((category) => (
+                    <SelectItem key={category} value={category}>
+                      {category}
+                    </SelectItem>
+                  ))}
+                <SelectSeparator />
+                <SelectItem value="__create__">Create new category</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="sidebar-separator" />
           <div className="sidebar-label source-heading">
             <span>YOUR SOURCES</span>
