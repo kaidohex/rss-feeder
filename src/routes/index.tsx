@@ -365,28 +365,28 @@ function Reader() {
       <div className="workspace">
         <aside className="sidebar">
           <div className="sidebar-label">YOUR LIBRARY</div>
-          <div className="category-list-select">
-            <Select value={selectedCategory} onValueChange={chooseCategory}>
-              <SelectTrigger
-                aria-label="Choose a category"
-                className="h-9 w-full bg-card text-foreground"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="All stories">All stories</SelectItem>
-                {categories
-                  .filter((category) => category !== "All stories")
-                  .map((category) => (
-                    <SelectItem key={category} value={category}>
-                      {category}
-                    </SelectItem>
-                  ))}
-                <SelectSeparator />
-                <SelectItem value="__create__">Create new category</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <nav className="category-list" aria-label="Feed categories">
+            {categories.map((category) => {
+              const count =
+                category === "All stories"
+                  ? libraryArticles.length
+                  : libraryArticles.filter((article) => article.category === category).length;
+              return (
+                <button
+                  key={category}
+                  className={cn(
+                    "category-tab",
+                    selectedCategory === category && "category-tab-active",
+                  )}
+                  onClick={() => setSelectedCategory(category)}
+                  aria-current={selectedCategory === category ? "page" : undefined}
+                >
+                  <span className="category-dot" /> <span>{category}</span>
+                  <span className="category-count">{count || "—"}</span>
+                </button>
+              );
+            })}
+          </nav>
           <div className="sidebar-separator" />
           <div className="sidebar-label source-heading">
             <span>YOUR SOURCES</span>
@@ -668,6 +668,10 @@ function SettingsDialog({
       setError("Use an HTTPS feed URL for a secure connection.");
       return;
     }
+    if (!category.trim()) {
+      setError("Enter a category.");
+      return;
+    }
     onSave({
       id: editingFeed?.id ?? "",
       name: name.trim(),
@@ -717,12 +721,31 @@ function SettingsDialog({
             </label>
             <label className="form-label">
               Category
-              <Input
-                required
+              <Select
                 value={category}
-                onChange={(event) => setCategory(event.target.value)}
-                placeholder="e.g. Culture"
-              />
+                onValueChange={(value) => {
+                  if (value === "__create__") {
+                    setCategory(`New ${Date.now()}`);
+                    return;
+                  }
+                  setCategory(value);
+                }}
+              >
+                <SelectTrigger className="w-full" aria-label="Category">
+                  <SelectValue placeholder="e.g. Culture" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from(new Set(feeds.map((feed) => feed.category).filter(Boolean))).map(
+                    (cat) => (
+                      <SelectItem key={cat} value={cat}>
+                        {cat}
+                      </SelectItem>
+                    ),
+                  )}
+                  <SelectSeparator />
+                  <SelectItem value="__create__">Create new category</SelectItem>
+                </SelectContent>
+              </Select>
             </label>
             {error && (
               <p className="form-error" role="alert">
