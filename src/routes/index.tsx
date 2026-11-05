@@ -40,6 +40,7 @@ import {
   type RssArticle,
   type SavedFeedSettings,
 } from "@/lib/rss-reader";
+import { fetchFeedXml } from "@/lib/feed-server";
 
 export const Route = createFileRoute("/")({
   head: () => ({

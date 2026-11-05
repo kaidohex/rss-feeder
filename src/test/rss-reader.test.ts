@@ -3,9 +3,25 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   fetchFeedArticles,
   mergeFeeds,
+  parseFeedXml,
   parseFeedSettings,
   type FeedSource,
 } from "@/lib/rss-reader";
+import { fetchFeedXml } from "@/lib/feed-server";
+
+vi.mock("@/lib/feed-server", () => ({
+  fetchFeedXml: vi.fn(async () =>
+    [
+      '<?xml version="1.0"?>',
+      '<rss version="2.0"><channel><title>Example feed</title><item>',
+      "<title>Story one</title>",
+      "<link>https://example.com/one</link>",
+      "<pubDate>2026-11-05</pubDate>",
+      "<description>Hello world</description>",
+      "</item></channel></rss>",
+    ].join(""),
+  ),
+}));
 
 const defaults: FeedSource[] = [
   { id: "world", name: "World", category: "News", url: "https://example.com/rss", enabled: true },
@@ -139,7 +155,7 @@ afterEach(() => {
 });
 
 describe("RSS article fetching", () => {
-  it("surfaces the feed service message when a request is rate limited", async () => {
+  it("falls back to direct feed parsing when the feed service rejects", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
@@ -153,8 +169,32 @@ describe("RSS article fetching", () => {
       ),
     );
 
-    await expect(fetchFeedArticles(defaults[0]!)).rejects.toThrow(
-      "You are converting new feeds in a very short period, please use an API key.",
-    );
+    const articles = await fetchFeedArticles(defaults[0]!);
+    expect(articles).toHaveLength(1);
+    expect(articles[0]).toMatchObject({ title: "Story one", link: "https://example.com/one" });
+  });
+
+  it("parses rss xml into articles", () => {
+    const xml = [
+      '<?xml version="1.0"?>',
+      '<rss version="2.0"><channel><title>Example feed</title><item>',
+      "<title>Story one</title>",
+      "<link>https://example.com/one</link>",
+      "<pubDate>2026-11-05</pubDate>",
+      "<description>Hello world</description>",
+      "</item></channel></rss>",
+    ].join("");
+
+    const articles = parseFeedXml(xml, defaults[0]!);
+    expect(articles).toHaveLength(1);
+    expect(articles[0]).toMatchObject({
+      feedId: "world",
+      title: "Story one",
+      description: "Hello world",
+      link: "https://example.com/one",
+      publishedAt: "2026-11-05",
+      source: "World",
+      category: "News",
+    });
   });
 });

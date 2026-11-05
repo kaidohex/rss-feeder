@@ -1,3 +1,5 @@
+import { fetchFeedXml } from "./feed-server";
+
 export interface FeedSource {
   id: string;
   name: string;
@@ -91,56 +93,117 @@ interface Rss2JsonItem {
   enclosure?: { link?: unknown } | null;
 }
 
-export async function fetchFeedArticles(feed: FeedSource): Promise<RssArticle[]> {
-  const endpoint = new URL("https://api.rss2json.com/v1/api.json");
-  endpoint.searchParams.set("rss_url", feed.url);
-  const response = await fetch(endpoint.toString());
-  if (!response.ok) {
-    let message = `The feed service returned ${response.status}.`;
-    try {
-      const body: unknown = await response.json();
-      if (
-        body &&
-        typeof body === "object" &&
-        typeof (body as { message?: unknown }).message === "string"
-      ) {
-        message = (body as { message: string }).message;
-      }
-    } catch {
-      // Keep the status-based message when the error body is not JSON.
-    }
-    throw new Error(message);
-  }
+function childValue(element: Element, name: string): string {
+  const child = Array.from(element.children).find((candidate) => candidate.localName === name);
+  const value =
+    child?.getAttribute("href") ?? child?.getAttribute("url") ?? child?.textContent ?? "";
+  return typeof value === "string" ? value.trim() : "";
+}
 
-  const data: unknown = await response.json();
-  if (!data || typeof data !== "object")
-    throw new Error("The feed returned an unreadable response.");
-  const result = data as {
-    status?: string;
-    message?: string;
-    items?: Rss2JsonItem[];
-  };
-  if (result.status !== "ok") throw new Error(result.message || "This feed could not be loaded.");
+function feedImage(element: Element): string | undefined {
+  const enclosure = Array.from(element.children).find(
+    (candidate) => candidate.localName === "enclosure",
+  );
+  const thumbnail = Array.from(element.children).find(
+    (candidate) => candidate.localName === "thumbnail",
+  );
+  const value = enclosure?.getAttribute("url") ?? thumbnail?.getAttribute("url") ?? "";
+  return safeImageUrl(value);
+}
 
-  return (result.items ?? []).slice(0, 12).map((item, index) => {
-    const date = typeof item.pubDate === "string" ? item.pubDate : "";
-    const description =
-      typeof item.description === "string"
-        ? item.description
-        : typeof item.content === "string"
-          ? item.content
-          : "";
-    const image = safeImageUrl(item.thumbnail) ?? safeImageUrl(item.enclosure?.link);
-    return {
-      id: `${feed.id}:${String(item.guid || item.link || index)}`,
+export function parseFeedXml(xml: string, feed: FeedSource): RssArticle[] {
+  if (typeof DOMParser === "undefined") return [];
+  const doc = new DOMParser().parseFromString(xml, "text/xml");
+  const root = doc.documentElement;
+  if (!root) return [];
+  const container =
+    root.localName === "rss"
+      ? (Array.from(root.children).find((child) => child.localName === "channel") ?? root)
+      : root;
+  const itemElements = Array.from(container.children).filter(
+    (child) => child.localName === "item" || child.localName === "entry",
+  );
+  const articles: RssArticle[] = [];
+  itemElements.slice(0, 12).forEach((item, index) => {
+    const description = [childValue(item, "description"), childValue(item, "content")].find(
+      (value) => value.length > 0,
+    );
+    const image = feedImage(item);
+    articles.push({
+      id: `${feed.id}:${childValue(item, "guid") || childValue(item, "id") || childValue(item, "link") || String(index)}`,
       feedId: feed.id,
-      title: plainText(typeof item.title === "string" ? item.title : "Untitled story"),
-      description: plainText(description),
-      link: safeLinkUrl(item.link) ?? feed.url,
-      publishedAt: date,
+      title: plainText(childValue(item, "title") || "Untitled story"),
+      description: plainText(description ?? ""),
+      link: safeLinkUrl(childValue(item, "link")) ?? safeLinkUrl(feed.url) ?? feed.url,
+      publishedAt:
+        childValue(item, "pubDate") || childValue(item, "published") || childValue(item, "updated"),
       source: feed.name,
       category: feed.category,
       ...(image ? { image } : {}),
-    };
+    });
   });
+  return articles;
+}
+
+export async function fetchFeedArticles(feed: FeedSource): Promise<RssArticle[]> {
+  try {
+    const endpoint = new URL("https://api.rss2json.com/v1/api.json");
+    endpoint.searchParams.set("rss_url", feed.url);
+    const response = await fetch(endpoint.toString());
+    if (!response.ok) {
+      let message = `The feed service returned ${response.status}.`;
+      try {
+        const body: unknown = await response.json();
+        if (
+          body &&
+          typeof body === "object" &&
+          typeof (body as { message?: unknown }).message === "string"
+        ) {
+          message = (body as { message: string }).message;
+        }
+      } catch {
+        // Keep the status-based message when the error body is not JSON.
+      }
+      throw new Error(message);
+    }
+
+    const data: unknown = await response.json();
+    if (!data || typeof data !== "object")
+      throw new Error("The feed returned an unreadable response.");
+    const result = data as {
+      status?: string;
+      message?: string;
+      items?: Rss2JsonItem[];
+    };
+    if (result.status !== "ok") throw new Error(result.message || "This feed could not be loaded.");
+
+    return (result.items ?? []).slice(0, 12).map((item, index) => {
+      const date = typeof item.pubDate === "string" ? item.pubDate : "";
+      const description =
+        typeof item.description === "string"
+          ? item.description
+          : typeof item.content === "string"
+            ? item.content
+            : "";
+      const image = safeImageUrl(item.enclosure?.link) ?? safeImageUrl(item.thumbnail);
+      return {
+        id: `${feed.id}:${String(item.guid || item.link || index)}`,
+        feedId: feed.id,
+        title: plainText(typeof item.title === "string" ? item.title : "Untitled story"),
+        description: plainText(description),
+        link: safeLinkUrl(item.link) ?? feed.url,
+        publishedAt: date,
+        source: feed.name,
+        category: feed.category,
+        ...(image ? { image } : {}),
+      };
+    });
+  } catch {
+    const xml = await (fetchFeedXml as unknown as (options: { data: string }) => Promise<string>)({
+      data: feed.url,
+    });
+    const articles = parseFeedXml(xml, feed);
+    if (!articles.length) throw new Error("This feed could not be loaded.");
+    return articles;
+  }
 }
