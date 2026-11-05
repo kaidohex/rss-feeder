@@ -232,6 +232,7 @@
 .story-excerpt { max-width: 700px; margin: 11px 0 0; color: var(--ink-soft); font-size: 12px; line-height: 1.7; }
 .story-card-bottom { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; }
 .story-time { display: inline-flex; align-items: center; gap: 6px; color: var(--muted-foreground); font-size: 10px; }
+.story-new-dot { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: var(--coral); }
 .read-link { display: inline-flex; align-items: center; gap: 5px; color: var(--forest); font-size: 11px; font-weight: 600; text-decoration: none; }
 .read-link:hover { color: var(--coral); }
 .story-image { display: block; width: 100%; max-height: 225px; margin: 4px 0 15px; border-radius: 3px; object-fit: cover; }

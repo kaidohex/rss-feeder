@@ -569,6 +569,8 @@ function StoryCard({ article, index }: { article: RssArticle; index: number }) {
   const time = Number.isNaN(date.getTime())
     ? "Recently"
     : formatDistanceToNow(date, { addSuffix: true });
+  const ageMs = date.getTime() ? Date.now() - date.getTime() : Number.POSITIVE_INFINITY;
+  const isNew = ageMs < 24 * 60 * 60 * 1000;
   const excerpt = article.description.replace(/\s+/g, " ").slice(0, 185);
   return (
     <article className={cn("story-card", index === 0 && "story-card-featured")}>
@@ -591,6 +593,7 @@ function StoryCard({ article, index }: { article: RssArticle; index: number }) {
       )}
       <div className="story-card-bottom">
         <span className="story-time">
+          {isNew && <span className="story-new-dot" aria-hidden="true" />}
           <Clock3 size={13} />
           {time}
         </span>
