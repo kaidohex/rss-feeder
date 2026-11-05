@@ -1,0 +1,16 @@
+[
+  {
+    "id": "tech-crunch",
+    "name": "TechCrunch",
+    "category": "Tech",
+    "url": "https://techcrunch.com/feed/",
+    "enabled": true
+  },
+  {
+    "id": "bbc-news",
+    "name": "BBC World News",
+    "category": "News",
+    "url": "https://feeds.bbci.co.uk/news/rss.xml",
+    "enabled": true
+  }
+]

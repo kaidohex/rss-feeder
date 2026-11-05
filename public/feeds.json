@@ -1,0 +1,7 @@
+[
+  { "id": "the-verge", "name": "The Verge", "category": "Technology", "url": "https://www.theverge.com/rss/index.xml", "enabled": true },
+  { "id": "ars-technica", "name": "Ars Technica", "category": "Technology", "url": "https://feeds.arstechnica.com/arstechnica/index", "enabled": true },
+  { "id": "bbc-world", "name": "BBC World", "category": "World", "url": "https://feeds.bbci.co.uk/news/world/rss.xml", "enabled": true },
+  { "id": "the-guardian", "name": "The Guardian", "category": "World", "url": "https://www.theguardian.com/world/rss", "enabled": true },
+  { "id": "dezeen", "name": "Dezeen", "category": "Design", "url": "https://www.dezeen.com/feed/", "enabled": true }
+]
