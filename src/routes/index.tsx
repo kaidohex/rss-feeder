@@ -70,6 +70,7 @@ function Reader() {
   const [settings, setSettings] = useState<SavedFeedSettings>(EMPTY_FEED_SETTINGS);
   const [articles, setArticles] = useState<RssArticle[]>([]);
   const [feedStatus, setFeedStatus] = useState<FeedStatus>({});
+  const [feedErrors, setFeedErrors] = useState<Record<string, string>>({});
   const [selectedCategory, setSelectedCategory] = useState("All stories");
   const [query, setQuery] = useState("");
   const [isReady, setIsReady] = useState(false);
@@ -121,19 +122,27 @@ function Reader() {
     [libraryArticles, query, selectedCategory],
   );
   const loading = Object.keys(feedStatus).some((id) => feedStatus[id] === "loading");
-  const hasError = Object.keys(feedStatus).some((id) => feedStatus[id] === "error");
+  const failedFeeds = feeds.filter((feed) => feedErrors[feed.id]);
+  const hasError = failedFeeds.length > 0;
+  const failedNames = failedFeeds.map((feed) => feed.name);
+  const failedLabel =
+    failedNames.length === 1
+      ? failedNames[0]
+      : `${failedNames.slice(0, -1).join(", ")} and ${failedNames.at(-1)}`;
 
   const refresh = useCallback(async (sources: FeedSource[]) => {
     const enabled = sources.filter((feed) => feed.enabled);
     if (!enabled.length) {
       setArticles([]);
       setFeedStatus({});
+      setFeedErrors({});
       setLastUpdated(new Date());
       return;
     }
     setFeedStatus(Object.fromEntries(enabled.map((feed) => [feed.id, "loading"])));
     const settled = await Promise.allSettled(enabled.map((feed) => fetchFeedArticles(feed)));
     const nextStatus: FeedStatus = {};
+    const nextErrors: Record<string, string> = {};
     const nextArticles: RssArticle[] = [];
     const successfulIds = new Set<string>();
     settled.forEach((result, index) => {
@@ -144,6 +153,8 @@ function Reader() {
         nextArticles.push(...result.value);
       } else {
         nextStatus[feed.id] = "error";
+        nextErrors[feed.id] =
+          result.reason instanceof Error ? result.reason.message : "The feed could not be loaded.";
       }
     });
     setArticles((current) => [
@@ -151,11 +162,12 @@ function Reader() {
       ...nextArticles,
     ]);
     setFeedStatus(nextStatus);
+    setFeedErrors(nextErrors);
     setLastUpdated(new Date());
-    if (Object.keys(nextStatus).length)
-      toast.error(
-        `${Object.keys(nextStatus).length} feed${Object.keys(nextStatus).length > 1 ? "s" : ""} could not be refreshed.`,
-      );
+    if (Object.keys(nextErrors).length) {
+      const names = enabled.filter((feed) => nextErrors[feed.id]).map((feed) => feed.name);
+      toast.error(`${names.join(", ")} could not be refreshed.`);
+    }
   }, []);
 
   useEffect(() => {
@@ -454,7 +466,11 @@ function Reader() {
           </div>
           {hasError && (
             <div className="feed-warning" role="status">
-              <span>Some sources couldn’t be reached.</span>
+              <span
+                title={failedFeeds.map((feed) => `${feed.name}: ${feedErrors[feed.id]}`).join("\n")}
+              >
+                Couldn’t reach {failedLabel}.
+              </span>
               <Button variant="ghost" size="sm" onClick={() => void refresh(feeds)}>
                 Try again <ArrowUpRight />
               </Button>

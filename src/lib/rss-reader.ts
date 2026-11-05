@@ -95,7 +95,22 @@ export async function fetchFeedArticles(feed: FeedSource): Promise<RssArticle[]>
   const endpoint = new URL("https://api.rss2json.com/v1/api.json");
   endpoint.searchParams.set("rss_url", feed.url);
   const response = await fetch(endpoint.toString());
-  if (!response.ok) throw new Error(`The feed service returned ${response.status}.`);
+  if (!response.ok) {
+    let message = `The feed service returned ${response.status}.`;
+    try {
+      const body: unknown = await response.json();
+      if (
+        body &&
+        typeof body === "object" &&
+        typeof (body as { message?: unknown }).message === "string"
+      ) {
+        message = (body as { message: string }).message;
+      }
+    } catch {
+      // Keep the status-based message when the error body is not JSON.
+    }
+    throw new Error(message);
+  }
 
   const data: unknown = await response.json();
   if (!data || typeof data !== "object")

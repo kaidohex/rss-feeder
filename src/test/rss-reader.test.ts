@@ -1,6 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { mergeFeeds, parseFeedSettings, type FeedSource } from "@/lib/rss-reader";
+import {
+  fetchFeedArticles,
+  mergeFeeds,
+  parseFeedSettings,
+  type FeedSource,
+} from "@/lib/rss-reader";
 
 const defaults: FeedSource[] = [
   { id: "world", name: "World", category: "News", url: "https://example.com/rss", enabled: true },
@@ -126,5 +131,30 @@ describe("RSS feed preferences", () => {
       overrides: {},
       removedIds: [],
     });
+  });
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe("RSS article fetching", () => {
+  it("surfaces the feed service message when a request is rate limited", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            status: "error",
+            message: "You are converting new feeds in a very short period, please use an API key.",
+          }),
+          { status: 429, headers: { "Content-Type": "application/json" } },
+        ),
+      ),
+    );
+
+    await expect(fetchFeedArticles(defaults[0]!)).rejects.toThrow(
+      "You are converting new feeds in a very short period, please use an API key.",
+    );
   });
 });
