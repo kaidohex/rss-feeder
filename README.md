@@ -22,18 +22,18 @@ npm install
 npm run dev
 ```
 
-Then open the URL printed in the terminal (default: http://localhost:5173).
+Then open the URL printed in the terminal (the dev server defaults to `http://localhost:5173`, or whatever port you started it on — for example, `http://localhost:8080`).
 
 ## Scripts
 
-| Command | Purpose |
-| --- | --- |
-| `npm run dev` | Start the dev server. |
-| `npm run build` | Production build. |
+| Command           | Purpose                     |
+| ----------------- | --------------------------- |
+| `npm run dev`     | Start the dev server.       |
+| `npm run build`   | Production build.           |
 | `npm run preview` | Serve the production build. |
-| `npm run lint` | Run ESLint. |
-| `npm run format` | Format with Prettier. |
-| `npm run test` | Run the test suite. |
+| `npm run lint`    | Run ESLint.                 |
+| `npm run format`  | Format with Prettier.       |
+| `npm run test`    | Run the test suite.         |
 
 ## How feed fetching works
 
@@ -42,23 +42,23 @@ Then open the URL printed in the terminal (default: http://localhost:5173).
 
 ## Project structure
 
-| Path | Description |
-| --- | --- |
-| `README.md` | This file. |
-| `LICENSE` | GNU GPL v3 license. |
-| `public/feeds.json` | Default feed list served to the app. |
-| `src/routes/index.tsx` | The reading desk UI, settings dialog, and in-app reader. |
-| `src/routes/__root.tsx` | App shell. |
-| `src/routes/routeTree.gen.ts` | Generated route tree. |
-| `src/router.tsx` | Router setup. |
-| `src/lib/rss-reader.ts` | Feed types, settings, parsing, fetching. |
-| `src/lib/feed-server.ts` | Server-side feed fetching. |
-| `src/lib/utils.ts` | Utility helpers. |
-| `src/components/ui/*` | Reusable UI primitives. |
-| `src/styles.css` | App styles. |
-| `src/test/*` | Tests. |
-| `src/start.ts` | App entry. |
-| `src/server.ts` | Server entry. |
+| Path                          | Description                                              |
+| ----------------------------- | -------------------------------------------------------- |
+| `README.md`                   | This file.                                               |
+| `LICENSE`                     | GNU GPL v3 license.                                      |
+| `public/feeds.json`           | Default feed list served to the app.                     |
+| `src/routes/index.tsx`        | The reading desk UI, settings dialog, and in-app reader. |
+| `src/routes/__root.tsx`       | App shell.                                               |
+| `src/routes/routeTree.gen.ts` | Generated route tree.                                    |
+| `src/router.tsx`              | Router setup.                                            |
+| `src/lib/rss-reader.ts`       | Feed types, settings, parsing, fetching.                 |
+| `src/lib/feed-server.ts`      | Server-side feed fetching.                               |
+| `src/lib/utils.ts`            | Utility helpers.                                         |
+| `src/components/ui/*`         | Reusable UI primitives.                                  |
+| `src/styles.css`              | App styles.                                              |
+| `src/test/*`                  | Tests.                                                   |
+| `src/start.ts`                | App entry.                                               |
+| `src/server.ts`               | Server entry.                                            |
 
 ## License
 
