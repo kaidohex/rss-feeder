@@ -20,6 +20,10 @@ dist-ssr
 .wrangler/
 .dev.vars
 
+# Tauri
+src-tauri/target
+src-tauri/gen
+
 # Lovable local metadata
 .lovable/
 
