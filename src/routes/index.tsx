@@ -91,6 +91,7 @@ function Reader() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [readingArticle, setReadingArticle] = useState<RssArticle | null>(null);
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
+  const [readIds, setReadIds] = useState<ReadonlySet<string>>(new Set<string>());
 
   const feeds = useMemo(() => mergeFeeds(baseFeeds, settings), [baseFeeds, settings]);
   const categories = useMemo(
@@ -134,8 +135,9 @@ function Reader() {
               .toLowerCase()
               .includes(query.toLowerCase()),
         )
+        .filter((article) => !readIds.has(article.id))
         .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()),
-    [libraryArticles, query, selectedCategory, selectedSourceId],
+    [libraryArticles, query, selectedCategory, selectedSourceId, readIds],
   );
   const loading = Object.keys(feedStatus).some((id) => feedStatus[id] === "loading");
   const failedFeeds = feeds.filter((feed) => feedErrors[feed.id]);
@@ -338,6 +340,11 @@ function Reader() {
     );
     setArticles((current) => current.filter((article) => article.feedId !== feed.id));
     toast.success(`${feed.name} removed`);
+  };
+
+  const markAsRead = (article: RssArticle) => {
+    setReadIds((current) => new Set(current).add(article.id));
+    setReadingArticle(null);
   };
 
   const updatedLabel = lastUpdated
@@ -612,17 +619,22 @@ function Reader() {
                   : null}
               </div>
               <div className="reader-actions">
-                <a
-                  href={readingArticle.link}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="read-link"
-                >
-                  Read story <ExternalLink size={13} />
-                </a>
-                <Button variant="outline" size="sm" onClick={() => setReadingArticle(null)}>
-                  <X size={14} /> Close
+                <Button variant="outline" size="sm" onClick={() => markAsRead(readingArticle)}>
+                  <Check /> Mark as read
                 </Button>
+                <div className="reader-actions-right">
+                  <a
+                    href={readingArticle.link}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="read-link"
+                  >
+                    Read story <ExternalLink size={13} />
+                  </a>
+                  <Button variant="outline" size="sm" onClick={() => setReadingArticle(null)}>
+                    <X size={14} /> Close
+                  </Button>
+                </div>
               </div>
             </>
           )}
