@@ -628,6 +628,7 @@ function SettingsDialog({
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [category, setCategory] = useState("");
+  const [creatingCategory, setCreatingCategory] = useState(false);
   const [error, setError] = useState("");
   const editingFeed = feeds.find((feed) => feed.id === editingFeedId);
 
@@ -636,12 +637,14 @@ function SettingsDialog({
       setName(editingFeed.name);
       setUrl(editingFeed.url);
       setCategory(editingFeed.category);
+      setCreatingCategory(false);
       setError("");
       setShowForm(true);
     } else if (open && !showForm) {
       setName("");
       setUrl("");
       setCategory("");
+      setCreatingCategory(false);
       setError("");
     }
   }, [editingFeed, open, showForm]);
@@ -652,6 +655,7 @@ function SettingsDialog({
     setName("");
     setUrl("");
     setCategory("");
+    setCreatingCategory(false);
     setError("");
   };
   const close = (nextOpen: boolean) => {
@@ -725,12 +729,14 @@ function SettingsDialog({
             <label className="form-label">
               Category
               <Select
-                value={category}
+                value={creatingCategory ? "" : category}
                 onValueChange={(value) => {
                   if (value === "__create__") {
-                    setCategory(`New ${Date.now()}`);
+                    setCreatingCategory(true);
+                    setCategory("");
                     return;
                   }
+                  setCreatingCategory(false);
                   setCategory(value);
                 }}
               >
@@ -749,6 +755,14 @@ function SettingsDialog({
                   <SelectItem value="__create__">Create new category</SelectItem>
                 </SelectContent>
               </Select>
+              {creatingCategory && (
+                <Input
+                  autoFocus
+                  value={category}
+                  onChange={(event) => setCategory(event.target.value)}
+                  placeholder="New category name"
+                />
+              )}
             </label>
             {error && (
               <p className="form-error" role="alert">
@@ -810,6 +824,7 @@ function SettingsDialog({
                 variant="outline"
                 onClick={() => {
                   setEditingFeedId(null);
+                  setCreatingCategory(false);
                   setShowForm(true);
                 }}
               >
