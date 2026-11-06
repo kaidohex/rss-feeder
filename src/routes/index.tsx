@@ -90,6 +90,7 @@ function Reader() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [readingArticle, setReadingArticle] = useState<RssArticle | null>(null);
+  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
 
   const feeds = useMemo(() => mergeFeeds(baseFeeds, settings), [baseFeeds, settings]);
   const categories = useMemo(
@@ -112,15 +113,19 @@ function Reader() {
       feeds.filter(
         (feed) =>
           feed.enabled &&
-          (selectedCategory === "All stories" || feed.category === selectedCategory),
+          (selectedSourceId
+            ? feed.id === selectedSourceId
+            : selectedCategory === "All stories" || feed.category === selectedCategory),
       ),
-    [feeds, selectedCategory],
+    [feeds, selectedCategory, selectedSourceId],
   );
   const visibleArticles = useMemo(
     () =>
       libraryArticles
-        .filter(
-          (article) => selectedCategory === "All stories" || article.category === selectedCategory,
+        .filter((article) =>
+          selectedSourceId
+            ? article.feedId === selectedSourceId
+            : selectedCategory === "All stories" || article.category === selectedCategory,
         )
         .filter(
           (article) =>
@@ -130,7 +135,7 @@ function Reader() {
               .includes(query.toLowerCase()),
         )
         .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()),
-    [libraryArticles, query, selectedCategory],
+    [libraryArticles, query, selectedCategory, selectedSourceId],
   );
   const loading = Object.keys(feedStatus).some((id) => feedStatus[id] === "loading");
   const failedFeeds = feeds.filter((feed) => feedErrors[feed.id]);
@@ -388,7 +393,10 @@ function Reader() {
                     "category-tab",
                     selectedCategory === category && "category-tab-active",
                   )}
-                  onClick={() => setSelectedCategory(category)}
+                  onClick={() => {
+                    setSelectedSourceId(null);
+                    setSelectedCategory(category);
+                  }}
                   aria-current={selectedCategory === category ? "page" : undefined}
                 >
                   <span className="category-dot" /> <span>{category}</span>
@@ -419,8 +427,8 @@ function Reader() {
                 <button
                   className="source-row"
                   key={feed.id}
-                  onClick={() => setSelectedCategory(feed.category)}
-                  title={`Show ${feed.category} stories`}
+                  onClick={() => setSelectedSourceId(feed.id)}
+                  title={`Show only ${feed.name} stories`}
                 >
                   <span className="source-avatar">{feed.name.slice(0, 1)}</span>
                   <span className="source-name">{feed.name}</span>
@@ -439,7 +447,13 @@ function Reader() {
               <div className="eyebrow">
                 <span className="eyebrow-rule" /> THE DAILY EDITION
               </div>
-              <h1>{selectedCategory === "All stories" ? "Your reading desk" : selectedCategory}</h1>
+              <h1>
+                {selectedSourceId
+                  ? (feeds.find((feed) => feed.id === selectedSourceId)?.name ?? selectedCategory)
+                  : selectedCategory === "All stories"
+                    ? "Your reading desk"
+                    : selectedCategory}
+              </h1>
               <p>A considered collection of the stories you follow.</p>
             </div>
             <div className="head-tools">
