@@ -34,6 +34,38 @@ Then open the URL printed in the terminal (the dev server defaults to `http://lo
 | `npm run lint`    | Run ESLint.                 |
 | `npm run format`  | Format with Prettier.       |
 | `npm run test`    | Run the test suite.         |
+| `npm run desktop` | Build the desktop bundle.   |
+| `npm run desktop:dev` | Run the desktop app with hot reload. |
+
+## Desktop app
+
+The desktop build uses [Tauri](https://tauri.app) v2: the UI stays React/TypeScript, and a small Rust shell hosts it in a native window.
+
+### Prerequisites (Windows)
+
+1. [Rust](https://rustup.rs) (the default `x86_64-pc-windows-msvc` toolchain).
+2. Visual Studio **Build Tools for Visual Studio** with:
+   - _Desktop development with C++_ (`Microsoft.VisualStudio.Component.VC.Tools.x86.x64`)
+   - _Windows 11 SDK_ (`Microsoft.VisualStudio.Component.Windows11SDK.22621`)
+
+The Windows SDK matters: without it the linker cannot find `kernel32.lib`.
+
+### Building
+
+```powershell
+.\build.ps1          # production bundle
+.\build.ps1 dev      # dev window with hot reload
+```
+
+`build.ps1` loads the Visual Studio developer environment (so `link.exe` and the SDK libraries are on `PATH`) and then runs the Tauri CLI. That means you can run it from any plain PowerShell window — no "Developer PowerShell" needed. Extra arguments are forwarded, for example `.\build.ps1 build --debug`.
+
+Installers are written to `src-tauri\target\release\bundle\`. On Windows you get an `.msi` and an NSIS `.exe`.
+
+`npm run src:build` is the same thing without the environment setup, and is what CI uses.
+
+### Releasing
+
+Push a tag such as `v0.1.0`, and `.github/workflows/release.yml` builds Windows, macOS, and Linux bundles and drafts a GitHub Release with the artifacts attached.
 
 ## How feed fetching works
 

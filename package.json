@@ -13,7 +13,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "src:dev": "tauri dev",
-    "src:build": "tauri build"
+    "src:build": "tauri build",
+    "desktop": "powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 build",
+    "desktop:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 dev"
   },
   "overrides": {
     "rolldown": "1.2.1"

@@ -1,11 +1,6 @@
 {
-  "identifier": "dev.kaidohex.marginalia",
-  "windows": [
-    {
-      "label": "main",
-      "title": "Marginalia — Your daily reading desk",
-      "webviewFeatures": [{ "defaultApiVersion": 1 }]
-    }
-  ],
+  "identifier": "default",
+  "description": "Default permissions for the Marginalia main window.",
+  "windows": ["main"],
   "permissions": ["core:default"]
 }

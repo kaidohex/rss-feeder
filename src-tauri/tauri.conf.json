@@ -12,6 +12,7 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Marginalia — Your daily reading desk",
         "width": 1440,
         "height": 900,
@@ -26,9 +27,10 @@
     "active": true,
     "targets": ["dmg", "msi", "nsis", "app", "deb", "rpm", "appimage"],
     "icon": [
+      "icons/32x32.png",
       "icons/128x128.png",
-      "icons/128x512.png",
-      "icons/icon.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
       "icons/icon.ico"
     ]
   }

@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -17,32 +18,55 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
           - os: macos-latest
-            target: x86_64-apple-darwin
+            target: aarch64-apple-darwin
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
     runs-on: ${{ matrix.os }}
+
     steps:
       - uses: actions/checkout@v4
+
+      # Tauri's Linux builds need the webkit2gtk and related dev packages
+      # before the frontend or Rust build starts.
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: "src-tauri"
+          workspaces: src-tauri
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: "npm"
+          cache: npm
+
       - run: npm ci
-      - run: npm run src:build -- --target ${{ matrix.target }}
+
+      # tauri-action runs the frontend build (beforeBuildCommand) and the
+      # Rust build itself, so no separate `tauri build` step is needed.
       - uses: tauri-apps/tauri-action@v2
-        with:
-          tag: ${{ github.ref_name }}
-          args: --target ${{ matrix.target }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install Linux dependencies
-        if: runner.os == "Linux"
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "Marginalia ${{ github.ref_name }}"
+          releaseBody: "See the assets below to download and install Marginalia."
+          releaseDraft: true
+          prerelease: false
+          args: --target ${{ matrix.target }}
