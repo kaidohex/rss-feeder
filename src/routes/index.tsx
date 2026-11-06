@@ -89,6 +89,7 @@ function Reader() {
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [searchOpen, setSearchOpen] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [readingArticle, setReadingArticle] = useState<RssArticle | null>(null);
 
   const feeds = useMemo(() => mergeFeeds(baseFeeds, settings), [baseFeeds, settings]);
   const categories = useMemo(
@@ -521,6 +522,7 @@ function Reader() {
                   key={`${article.id}-${article.source}`}
                   article={article}
                   index={index}
+                  onOpen={setReadingArticle}
                 />
               ))}
             </div>
@@ -569,11 +571,62 @@ function Reader() {
         onToggle={toggleFeed}
         onRemove={removeFeed}
       />
+      <Dialog
+        open={readingArticle !== null}
+        onOpenChange={(open) => {
+          if (!open) setReadingArticle(null);
+        }}
+      >
+        <DialogContent className="settings-dialog reader-dialog">
+          {readingArticle && (
+            <>
+              <DialogHeader>
+                <div className="dialog-kicker">YOUR READING DESK</div>
+                <DialogTitle className="reader-title">{readingArticle.title}</DialogTitle>
+                <DialogDescription>
+                  {readingArticle.source} · {readingArticle.category}
+                </DialogDescription>
+              </DialogHeader>
+              {readingArticle.image && (
+                <img className="story-image" src={readingArticle.image} alt="" />
+              )}
+              <div className="reader-body">
+                {readingArticle.description
+                  ? readingArticle.description
+                      .split(/\n\s*\n|\n+/)
+                      .map((paragraph, paragraphIndex) => <p key={paragraphIndex}>{paragraph}</p>)
+                  : null}
+              </div>
+              <div className="reader-actions">
+                <a
+                  href={readingArticle.link}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="read-link"
+                >
+                  Read story <ExternalLink size={13} />
+                </a>
+                <Button variant="outline" size="sm" onClick={() => setReadingArticle(null)}>
+                  <X size={14} /> Close
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }
 
-function StoryCard({ article, index }: { article: RssArticle; index: number }) {
+function StoryCard({
+  article,
+  index,
+  onOpen,
+}: {
+  article: RssArticle;
+  index: number;
+  onOpen?: (article: RssArticle) => void;
+}) {
   const date = new Date(article.publishedAt);
   const time = Number.isNaN(date.getTime())
     ? "Recently"
@@ -590,7 +643,17 @@ function StoryCard({ article, index }: { article: RssArticle; index: number }) {
         <span className="story-category">{article.category}</span>
       </div>
       {article.image && <img className="story-image" src={article.image} alt="" loading="lazy" />}
-      <a className="story-title-link" href={article.link} target="_blank" rel="noreferrer">
+      <a
+        className="story-title-link"
+        href={article.link}
+        target="_blank"
+        rel="noreferrer"
+        onClick={(event) => {
+          if (!onOpen) return;
+          event.preventDefault();
+          onOpen(article);
+        }}
+      >
         <h2 className="story-title">{article.title}</h2>
         <ExternalLink className="story-open" size={15} />
       </a>
