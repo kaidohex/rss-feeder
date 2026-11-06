@@ -73,6 +73,7 @@ export const Route = createFileRoute("/")({
 type FeedStatus = Record<string, "loading" | "error">;
 const SETTINGS_KEY = "marginalia-feed-settings";
 const THEME_KEY = "marginalia-theme";
+const AUTO_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
 
 function Reader() {
   const [baseFeeds, setBaseFeeds] = useState<FeedSource[]>([]);
@@ -231,6 +232,14 @@ function Reader() {
     media.addEventListener("change", handleChange);
     return () => media.removeEventListener("change", handleChange);
   }, []);
+
+  useEffect(() => {
+    if (!isReady) return;
+    const intervalId = window.setInterval(() => {
+      void refresh(feeds);
+    }, AUTO_REFRESH_INTERVAL_MS);
+    return () => window.clearInterval(intervalId);
+  }, [isReady, refresh, feeds]);
 
   const chooseCategory = (value: string) => {
     if (value === "__create__") {
