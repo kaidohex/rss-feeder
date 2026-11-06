@@ -1,9 +1,18 @@
-const { app, BrowserWindow, Menu, shell, session } = require("electron");
+const { app, BrowserWindow, Menu, dialog, shell, session } = require("electron");
 const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
 
+// Keep one profile name everywhere, so saved feeds live in the same place on
+// every launch (and in a folder that matches the product, not the repo name).
+app.setName("Marginalia");
+
 const DEV_URL = process.env.MARGINALIA_DEV_URL;
+
+// The window is served from a loopback origin. The port is fixed on purpose:
+// localStorage is keyed by origin, so a random port would give the app a fresh
+// empty profile every launch and its saved feeds would disappear.
+const APP_PORT = Number(process.env.MARGINALIA_PORT ?? 43117);
 
 // TanStack Start's SPA build emits the app shell as _shell.html; the static
 // server serves it for every route.
@@ -26,13 +35,16 @@ const MIME_TYPES = {
   ".woff2": "font/woff2",
 };
 
+let mainWindow = null;
+let appServer = null;
+
 /**
  * Serves the built single-page app from a loopback HTTP origin.
  *
  * A real origin (instead of file://) keeps absolute asset paths, fetch of
  * /feeds.json, and the history API working exactly like the web build.
  */
-function startStaticServer(rootDir) {
+function startStaticServer(rootDir, port) {
   const server = http.createServer((request, response) => {
     const requestUrl = new URL(request.url ?? "/", "http://127.0.0.1");
     const requestedPath = decodeURIComponent(requestUrl.pathname);
@@ -69,9 +81,7 @@ function startStaticServer(rootDir) {
 
   return new Promise((resolve, reject) => {
     server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      resolve({ server, port: server.address().port });
-    });
+    server.listen(port, "127.0.0.1", () => resolve(server));
   });
 }
 
@@ -134,31 +144,72 @@ async function createWindow() {
     },
   });
 
+  mainWindow = window;
+  window.on("closed", () => {
+    if (mainWindow === window) mainWindow = null;
+  });
+
   openExternalLinks(window);
   window.once("ready-to-show", () => window.show());
 
   if (DEV_URL) {
     await window.loadURL(DEV_URL);
     window.webContents.openDevTools({ mode: "detach" });
-    return;
+    return window;
   }
 
-  const rootDir = path.join(app.getAppPath(), "dist", "client");
-  const { server, port } = await startStaticServer(rootDir);
-  app.once("before-quit", () => server.close());
-  await window.loadURL(`http://127.0.0.1:${port}/`);
+  await window.loadURL(`http://127.0.0.1:${APP_PORT}/`);
+  return window;
 }
 
-app.whenReady().then(async () => {
+async function startApp() {
   Menu.setApplicationMenu(null);
   allowCrossOriginResponses();
+
+  if (!DEV_URL) {
+    const rootDir = path.join(app.getAppPath(), "dist", "client");
+    try {
+      appServer = await startStaticServer(rootDir, APP_PORT);
+    } catch (error) {
+      if (error && error.code === "EADDRINUSE") {
+        dialog.showErrorBox(
+          "Marginalia could not start",
+          `Port ${APP_PORT} is already in use by another program.\n\nClose it and start Marginalia again.`,
+        );
+      } else {
+        dialog.showErrorBox("Marginalia could not start", String(error));
+      }
+      app.quit();
+      return;
+    }
+  }
+
   await createWindow();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) void createWindow();
   });
-});
+}
 
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
-});
+// A second launch should focus the running window instead of starting another
+// copy that would fight over the fixed port and profile.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    if (!mainWindow) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  });
+
+  app.whenReady().then(startApp);
+
+  app.on("window-all-closed", () => {
+    if (process.platform !== "darwin") app.quit();
+  });
+
+  app.on("before-quit", () => {
+    appServer?.close();
+  });
+}
