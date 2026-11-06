@@ -1,0 +1,32 @@
+appId: dev.kaidohex.marginalia
+productName: Marginalia
+copyright: Copyright © 2026 kaidohex
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - electron/**/*
+  - dist/client/**/*
+  - package.json
+  # The renderer is fully bundled by Vite and the main process only uses
+  # Electron/Node built-ins, so no runtime node_modules are needed.
+  - "!node_modules/**/*"
+
+asar: true
+
+# Portable output: an unpacked folder you can copy anywhere. No installer.
+win:
+  target: dir
+  icon: build/icon.ico
+
+linux:
+  target: dir
+  icon: build/icon.png
+  category: News
+
+mac:
+  target: dir
+  icon: build/icon.png
+  category: public.app-category.news

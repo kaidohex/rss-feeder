@@ -34,43 +34,37 @@ Then open the URL printed in the terminal (the dev server defaults to `http://lo
 | `npm run lint`    | Run ESLint.                 |
 | `npm run format`  | Format with Prettier.       |
 | `npm run test`    | Run the test suite.         |
-| `npm run desktop` | Build the desktop bundle.   |
-| `npm run desktop:dev` | Run the desktop app with hot reload. |
+| `npm run desktop` | Run the desktop app with hot reload. |
+| `npm run desktop:build` | Build the portable desktop folder. |
 
 ## Desktop app
 
-The desktop build uses [Tauri](https://tauri.app) v2: the UI stays React/TypeScript, and a small Rust shell hosts it in a native window.
+The desktop build uses [Electron](https://www.electronjs.org). The UI stays React/TypeScript; Electron hosts it in a native window.
 
-### Prerequisites (Windows)
+### Running
 
-1. [Rust](https://rustup.rs) (the default `x86_64-pc-windows-msvc` toolchain).
-2. Visual Studio **Build Tools for Visual Studio** with:
-   - _Desktop development with C++_ (`Microsoft.VisualStudio.Component.VC.Tools.x86.x64`)
-   - _Windows 11 SDK_ (`Microsoft.VisualStudio.Component.Windows11SDK.22621`)
-
-The Windows SDK matters: without it the linker cannot find `kernel32.lib`.
-
-### Building
-
-```powershell
-.\build.ps1          # production bundle
-.\build.ps1 dev      # dev window with hot reload
+```sh
+npm run desktop        # dev window with hot reload
+npm run desktop:build  # portable build
 ```
 
-`build.ps1` loads the Visual Studio developer environment (so `link.exe` and the SDK libraries are on `PATH`) and then runs the Tauri CLI. That means you can run it from any plain PowerShell window — no "Developer PowerShell" needed. Extra arguments are forwarded, for example `.\build.ps1 build --debug`.
+`desktop:build` produces a copyable folder at `release\win-unpacked\` — run `Marginalia.exe` from there, or copy the whole folder anywhere. Nothing is installed on the machine.
 
-Installers are written to `src-tauri\target\release\bundle\`. On Windows you get an `.msi` and an NSIS `.exe`.
+### How it works
 
-`npm run src:build` is the same thing without the environment setup, and is what CI uses.
+- `electron/main.cjs` — creates the window, serves the built SPA from a loopback HTTP origin (`127.0.0.1`), and opens article links in the system browser.
+- `scripts/desktop.mjs` — starts Vite and Electron together in dev, and runs the SPA build plus packaging for the portable output.
+- `electron-builder.yml` — packaging config (`dir` target, no installer).
+- The desktop build uses TanStack Start's SPA mode (`MARGINALIA_DESKTOP=1`): no Nitro server bundle, and `src/lib/feed-server.desktop.ts` replaces the server function with a direct fetch. Electron allows cross-origin responses for the local app window, so feed requests hit the source normally.
 
 ### Releasing
 
-Push a tag such as `v0.1.0`, and `.github/workflows/release.yml` builds Windows, macOS, and Linux bundles and drafts a GitHub Release with the artifacts attached.
+Push a tag such as `v0.1.0`. `.github/workflows/release.yml` builds the portable folder on `windows-latest`, zips it, and drafts a GitHub Release with the archive attached.
 
 ## How feed fetching works
 
 - `src/lib/rss-reader.ts` — feed types, saved-settings merge, RSS/Atom parsing, article fetching.
-- `src/lib/feed-server.ts` — server-side fetch used as a fallback when the feed service is unavailable.
+- `src/lib/feed-server.ts` — server-side fetch used as a fallback when the feed service is unavailable. The desktop build swaps this for `feed-server.desktop.ts`, which fetches directly.
 
 ## Project structure
 
@@ -85,6 +79,11 @@ Push a tag such as `v0.1.0`, and `.github/workflows/release.yml` builds Windows,
 | `src/router.tsx`              | Router setup.                                            |
 | `src/lib/rss-reader.ts`       | Feed types, settings, parsing, fetching.                 |
 | `src/lib/feed-server.ts`      | Server-side feed fetching.                               |
+| `src/lib/feed-server.desktop.ts` | Direct feed fetching used by the desktop build.       |
+| `electron/main.cjs`           | Electron window, static app server, external links.      |
+| `scripts/desktop.mjs`         | Desktop dev and build runner.                            |
+| `electron-builder.yml`        | Portable packaging config.                               |
+| `build/`                      | App icons used when packaging.                           |
 | `src/lib/utils.ts`            | Utility helpers.                                         |
 | `src/components/ui/*`         | Reusable UI primitives.                                  |
 | `src/styles.css`              | App styles.                                              |

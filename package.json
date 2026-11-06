@@ -1,8 +1,12 @@
 {
   "name": "tanstack_start_ts",
   "private": true,
+  "version": "0.1.0",
+  "description": "A calm, personal reading desk for stories from the feeds you follow.",
+  "author": "kaidohex <154259109+kaidohex@users.noreply.github.com>",
   "sideEffects": false,
   "type": "module",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
@@ -12,10 +16,8 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "src:dev": "tauri dev",
-    "src:build": "tauri build",
-    "desktop": "powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 build",
-    "desktop:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 dev"
+    "desktop": "node scripts/desktop.mjs dev",
+    "desktop:build": "node scripts/desktop.mjs build"
   },
   "overrides": {
     "rolldown": "1.2.1"
@@ -85,6 +87,8 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.2.0",
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0",
     "eslint": "^9.32.0",
     "eslint-config-prettier": "^10.1.1",
     "eslint-plugin-prettier": "^5.2.6",
