@@ -4,6 +4,7 @@
 //     nitro (build-only using cloudflare as a default target), VITE_* env injection, @ path alias,
 //     React/TanStack dedupe, error logger plugins, and sandbox detection (port/host/strictPort).
 // You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
@@ -16,6 +17,12 @@ const desktopFeedFetch = fileURLToPath(
   new URL("./src/lib/feed-server.desktop.ts", import.meta.url),
 );
 
+const appVersion = (
+  JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")) as {
+    version: string;
+  }
+).version;
+
 export default defineConfig({
   ...(desktop ? { nitro: false } : {}),
   tanstackStart: desktop
@@ -25,13 +32,14 @@ export default defineConfig({
         // nitro/vite builds from this
         server: { entry: "server" },
       },
-  ...(desktop
-    ? {
-        vite: {
+  vite: {
+    define: { __APP_VERSION__: JSON.stringify(appVersion) },
+    ...(desktop
+      ? {
           resolve: {
             alias: [{ find: /^\.\/feed-server$/, replacement: desktopFeedFetch }],
           },
-        },
-      }
-    : {}),
+        }
+      : {}),
+  },
 });

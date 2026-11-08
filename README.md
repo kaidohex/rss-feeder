@@ -10,6 +10,8 @@ A calm, personal RSS reading desk. Marginalia turns your RSS/Atom feeds into a c
 - **Full in-app reader** — click a story to read it in-app; the original article stays one click away via "Read story".
 - **Auto-refresh** — enabled feeds refresh every 30 minutes; a manual refresh button is always available.
 - **Themes** — light/dark that follow the system until you choose.
+- **OPML in and out** — export your library as OPML for any other reader, and import an OPML file from one. Invalid or insecure feed addresses are dropped, and importing never duplicates a feed you already follow.
+- **Update check** — the Manage feeds dialog shows the running version and asks GitHub whether a newer release exists.
 
 ## Download
 
@@ -91,6 +93,8 @@ A tag that does not match `package.json` fails the run before anything is built.
 | `src/routes/routeTree.gen.ts` | Generated route tree.                                    |
 | `src/router.tsx`              | Router setup.                                            |
 | `src/lib/rss-reader.ts`       | Feed types, settings, parsing, fetching.                 |
+| `src/lib/opml.ts`             | OPML export and import used by Manage feeds.             |
+| `src/lib/update-check.ts`     | Version comparison against the latest GitHub release.    |
 | `src/lib/feed-server.ts`      | Server-side feed fetching.                               |
 | `src/lib/feed-server.desktop.ts` | Direct feed fetching used by the desktop build.       |
 | `electron/main.cjs`           | Electron window, static app server, external links.      |

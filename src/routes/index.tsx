@@ -33,6 +33,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -52,6 +58,8 @@ import {
   type SavedFeedSettings,
 } from "@/lib/rss-reader";
 import { fetchFeedXml } from "@/lib/feed-server";
+import { parseOpmlFeeds, toOpml, type OpmlFeed } from "@/lib/opml";
+import { checkForUpdates, type UpdateResult } from "@/lib/update-check";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -345,18 +353,27 @@ function Reader() {
     toast.success(`${feed.name} removed`);
   };
 
-  const exportFeeds = useCallback(() => {
-    const blob = new Blob([JSON.stringify(settings, null, 2)], { type: "application/json" });
+  const downloadFile = (name: string, contents: string, type: string) => {
+    const blob = new Blob([contents], { type });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = "marginalia-feeds.json";
+    anchor.download = name;
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const exportSettings = useCallback(() => {
+    downloadFile("marginalia-feeds.json", JSON.stringify(settings, null, 2), "application/json");
     toast.success("Feeds exported");
   }, [settings]);
+
+  const exportOpml = useCallback(() => {
+    downloadFile("marginalia-feeds.opml", toOpml(feeds), "text/x-opml");
+    toast.success("Feeds exported as OPML");
+  }, [feeds]);
 
   const importFeeds = useCallback(
     (incoming: SavedFeedSettings) => {
@@ -393,6 +410,26 @@ function Reader() {
       );
     },
     [baseFeeds, feeds, refresh, settings],
+  );
+
+  const importOpml = useCallback(
+    (entries: OpmlFeed[]) => {
+      // OPML has no notion of the built-in sources, so everything it carries
+      // arrives as a custom feed. importFeeds still skips URLs already known.
+      importFeeds({
+        customFeeds: entries.map((entry, index) => ({
+          id: `custom-opml-${Date.now()}-${index}`,
+          name: entry.name,
+          url: entry.url,
+          category: entry.category,
+          enabled: true,
+          custom: true,
+        })),
+        overrides: {},
+        removedIds: [],
+      });
+    },
+    [importFeeds],
   );
 
   const markAsRead = (article: RssArticle) => {
@@ -644,8 +681,10 @@ function Reader() {
         onSave={saveFeed}
         onToggle={toggleFeed}
         onRemove={removeFeed}
-        onExport={exportFeeds}
+        onExportJson={exportSettings}
+        onExportOpml={exportOpml}
         onImport={importFeeds}
+        onImportOpml={importOpml}
       />
       <Dialog
         open={readingArticle !== null}
@@ -767,8 +806,10 @@ function SettingsDialog({
   onSave,
   onToggle,
   onRemove,
-  onExport,
+  onExportJson,
+  onExportOpml,
   onImport,
+  onImportOpml,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -778,8 +819,10 @@ function SettingsDialog({
   onSave: (feed: FeedSource) => void;
   onToggle: (feed: FeedSource, enabled: boolean) => void;
   onRemove: (feed: FeedSource) => void;
-  onExport: () => void;
+  onExportJson: () => void;
+  onExportOpml: () => void;
   onImport: (settings: SavedFeedSettings) => void;
+  onImportOpml: (entries: OpmlFeed[]) => void;
 }) {
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
@@ -788,6 +831,8 @@ function SettingsDialog({
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [error, setError] = useState("");
   const [importError, setImportError] = useState("");
+  const [updateCheck, setUpdateCheck] = useState<UpdateResult | null>(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const editingFeed = feeds.find((feed) => feed.id === editingFeedId);
 
@@ -855,7 +900,23 @@ function SettingsDialog({
     event.target.value = "";
     if (!file) return;
     try {
-      const parsed = parseImportedFeedSettings(await file.text());
+      const contents = await file.text();
+      // OPML is XML, so the first meaningful character tells the two apart.
+      if (contents.trimStart().startsWith("<")) {
+        const entries = parseOpmlFeeds(contents);
+        if (!entries) {
+          setImportError("That file is not an OPML feed list.");
+          return;
+        }
+        if (!entries.length) {
+          setImportError("That OPML file has no feeds with an HTTPS address.");
+          return;
+        }
+        setImportError("");
+        onImportOpml(entries);
+        return;
+      }
+      const parsed = parseImportedFeedSettings(contents);
       if (!parsed) {
         setImportError("That file is not a Marginalia feeds export.");
         return;
@@ -865,6 +926,12 @@ function SettingsDialog({
     } catch {
       setImportError("That file could not be read.");
     }
+  };
+
+  const runUpdateCheck = async () => {
+    setCheckingUpdate(true);
+    setUpdateCheck(await checkForUpdates(__APP_VERSION__));
+    setCheckingUpdate(false);
   };
 
   return (
@@ -995,6 +1062,11 @@ function SettingsDialog({
                 </div>
               ))}
             </div>
+            {importError && (
+              <p className="form-error form-error-import" role="alert">
+                {importError}
+              </p>
+            )}
             <div className="dialog-bottom">
               <span>{feeds.length} publications in your library</span>
               <div className="dialog-actions">
@@ -1018,24 +1090,53 @@ function SettingsDialog({
                       setImportError("");
                       fileInputRef.current?.click();
                     }}
+                    title="Import a Marginalia export or an OPML file"
                   >
                     <Upload /> Import
                   </Button>
-                  <Button type="button" variant="ghost" size="sm" onClick={onExport}>
-                    <Download /> Export
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button type="button" variant="ghost" size="sm">
+                        <Download /> Export
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" side="top">
+                      <DropdownMenuItem onSelect={onExportOpml}>
+                        OPML for other readers
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={onExportJson}>
+                        Marginalia backup (JSON)
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
+              <div className="dialog-about">
+                <span>Marginalia v{__APP_VERSION__}</span>
+                <span className="dialog-about-sep" aria-hidden="true">
+                  ·
+                </span>
+                {updateCheck?.status === "available" ? (
+                  <a href={updateCheck.url} target="_blank" rel="noreferrer">
+                    v{updateCheck.latest} is available <ExternalLink size={11} />
+                  </a>
+                ) : (
+                  <button type="button" onClick={runUpdateCheck} disabled={checkingUpdate}>
+                    {checkingUpdate
+                      ? "Checking for updates…"
+                      : updateCheck?.status === "current"
+                        ? `Up to date (v${updateCheck.latest})`
+                        : updateCheck?.status === "unknown"
+                          ? "Could not check — retry"
+                          : "Check for updates"}
+                  </button>
+                )}
+              </div>
             </div>
-            {importError && (
-              <p className="form-error" role="alert">
-                {importError}
-              </p>
-            )}
             <input
               ref={fileInputRef}
               type="file"
-              accept=".json,application/json"
+              accept=".json,.opml,.xml,application/json,text/xml,text/x-opml"
               className="hidden"
               onChange={handleImportFile}
             />
