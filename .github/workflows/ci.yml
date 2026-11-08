@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Typecheck, lint and test
+    runs-on: windows-latest
+    env:
+      # The checks and the unit tests never touch the Electron binary.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm run lint
+
+      - run: npm test
+
+  build:
+    name: Portable desktop build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run desktop:build
+
+      - name: Check the packaged app
+        shell: pwsh
+        run: |
+          $exe = "release/win-unpacked/Marginalia.exe"
+          if (-not (Test-Path $exe)) { throw "Packaging did not produce $exe" }
+          $size = [math]::Round((Get-Item $exe).Length / 1MB)
+          if ($size -lt 50) { throw "Marginalia.exe looks truncated ($size MB)" }
+          Write-Host "Marginalia.exe built ($size MB)"
+
+      - name: Zip the portable folder
+        shell: pwsh
+        run: Compress-Archive -Path release/win-unpacked/* -DestinationPath "Marginalia-${{ github.sha }}-windows-x64.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Marginalia-windows-x64
+          path: Marginalia-*-windows-x64.zip
+          retention-days: 7

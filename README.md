@@ -11,7 +11,11 @@ A calm, personal RSS reading desk. Marginalia turns your RSS/Atom feeds into a c
 - **Auto-refresh** — enabled feeds refresh every 30 minutes; a manual refresh button is always available.
 - **Themes** — light/dark that follow the system until you choose.
 
-## Getting started
+## Download
+
+Grab the latest portable Windows build from [Releases](../../releases/latest): unzip it anywhere and run `Marginalia.exe`. Nothing is installed on the machine, and your feeds live in `%APPDATA%\Marginalia`.
+
+## Run from source
 
 You need [Node.js](https://nodejs.org) (v20 or newer) and npm. No other software required.
 
@@ -32,6 +36,7 @@ Then open the URL printed in the terminal (the dev server defaults to `http://lo
 | `npm run build`   | Production build.           |
 | `npm run preview` | Serve the production build. |
 | `npm run lint`    | Run ESLint.                 |
+| `npm run typecheck` | Type-check with TypeScript. |
 | `npm run format`  | Format with Prettier.       |
 | `npm run test`    | Run the test suite.         |
 | `npm run desktop` | Run the desktop app with hot reload. |
@@ -59,7 +64,15 @@ npm run desktop:build  # portable build
 
 ### Releasing
 
-Push a tag such as `v0.1.0`. `.github/workflows/release.yml` builds the portable folder on `windows-latest`, zips it, and drafts a GitHub Release with the archive attached.
+`.github/workflows/ci.yml` type-checks, lints, tests, and packages the portable build on every push to `main` and on pull requests, so a broken build shows up before it can ship.
+
+To cut a release:
+
+1. Set the new version in `package.json`.
+2. Commit, then tag it to match: `git tag v1.2.3 && git push origin main v1.2.3`.
+3. `.github/workflows/release.yml` runs the same checks first. Only if they pass does it build the portable folder on `windows-latest`, zip it, write `SHA256SUMS.txt`, and publish the GitHub Release with both files attached.
+
+A tag that does not match `package.json` fails the run before anything is built.
 
 ## How feed fetching works
 

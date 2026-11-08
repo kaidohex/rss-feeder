@@ -1,7 +1,7 @@
 {
-  "name": "tanstack_start_ts",
+  "name": "marginalia",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "A calm, personal reading desk for stories from the feeds you follow.",
   "author": "kaidohex <154259109+kaidohex@users.noreply.github.com>",
   "sideEffects": false,
@@ -13,6 +13,7 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
     "test": "vitest run",
     "test:watch": "vitest",

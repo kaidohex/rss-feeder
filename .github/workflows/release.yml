@@ -10,7 +10,30 @@ permissions:
   contents: write
 
 jobs:
-  windows:
+  verify:
+    name: Typecheck, lint and test
+    runs-on: windows-latest
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm run lint
+
+      - run: npm test
+
+  publish:
+    name: Build and publish
+    needs: verify
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,15 +45,57 @@ jobs:
 
       - run: npm ci
 
+      - name: Check the tag matches package.json
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          $tag = "${{ github.ref_name }}"
+          if ($tag -ne "v$version") { throw "Tag $tag does not match package.json version $version" }
+
       # Builds the SPA, then packages an unpacked portable folder in release/win-unpacked.
       - run: npm run desktop:build
 
+      - name: Check the packaged app
+        shell: pwsh
+        run: |
+          $exe = "release/win-unpacked/Marginalia.exe"
+          if (-not (Test-Path $exe)) { throw "Packaging did not produce $exe" }
+          $size = [math]::Round((Get-Item $exe).Length / 1MB)
+          if ($size -lt 50) { throw "Marginalia.exe looks truncated ($size MB)" }
+          Write-Host "Marginalia.exe built ($size MB)"
+
       - name: Zip the portable folder
+        shell: pwsh
         run: Compress-Archive -Path release/win-unpacked/* -DestinationPath "Marginalia-${{ github.ref_name }}-windows-x64.zip"
+
+      - name: Write checksums
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem "Marginalia-*-windows-x64.zip" | Select-Object -First 1
+          $hash = (Get-FileHash $zip.Name -Algorithm SHA256).Hash.ToLower()
+          "$hash  $($zip.Name)" | Set-Content -Path SHA256SUMS.txt -Encoding ascii
+          Get-Content SHA256SUMS.txt
 
       - uses: softprops/action-gh-release@v2
         with:
-          draft: true
+          draft: false
           name: "Marginalia ${{ github.ref_name }}"
-          body: "Portable Windows build. Unzip and run Marginalia.exe — no installation needed."
-          files: Marginalia-*-windows-x64.zip
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          body: |
+            ### Portable Windows build
+
+            1. Download the zip below and unzip it anywhere.
+            2. Run `Marginalia.exe` — nothing is installed, and no admin rights are needed.
+            3. Your feeds and settings live in `%APPDATA%\Marginalia`, so the folder can be moved or deleted freely.
+
+            ### Good to know
+
+            - The build is unsigned, so Windows SmartScreen may ask for confirmation on first launch. Choose **More info → Run anyway**.
+            - Moving feeds between the browser and desktop builds: use **Manage feeds → Export** in one and **Import** in the other.
+            - Check the download with `SHA256SUMS.txt` if you want to be sure the archive arrived intact.
+
+            Full changelog: https://github.com/${{ github.repository }}/commits/${{ github.ref_name }}
+          files: |
+            Marginalia-*-windows-x64.zip
+            SHA256SUMS.txt
