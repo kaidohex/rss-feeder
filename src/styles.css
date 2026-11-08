@@ -164,6 +164,39 @@
   }
 }
 
+/*
+ * Scrollbars belong to the desk, not to Chromium: a slim rounded thumb that
+ * floats on the surface instead of the default square bar.
+ */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklch, var(--ink-soft) 32%, transparent) transparent;
+  }
+}
+
+@supports selector(::-webkit-scrollbar) {
+  ::-webkit-scrollbar { width: 11px; height: 11px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+  ::-webkit-scrollbar-thumb {
+    min-height: 44px;
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background: color-mix(in oklch, var(--ink-soft) 30%, transparent);
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklch, var(--ink-soft) 45%, transparent);
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:active {
+    background: color-mix(in oklch, var(--ink-soft) 58%, transparent);
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-corner { background: transparent; }
+}
+
 .reader-shell { min-height: 100vh; }
 .topbar { position: sticky; top: 0; z-index: 20; height: 72px; display: flex; align-items: center; padding-inline: clamp(22px, 5vw, 76px); border-bottom: 1px solid var(--line-soft); background: var(--background); gap: 22px; }
 .brand-lockup { display: inline-flex; align-items: center; gap: 10px; color: var(--foreground); text-decoration: none; font-weight: 700; font-size: 19px; }
@@ -175,7 +208,7 @@
 .top-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; }
 .top-actions > button { height: 38px; }
 .settings-trigger { gap: 9px; }
-.workspace { display: grid; grid-template-columns: 252px minmax(0, 1fr); min-height: calc(100vh - 72px); max-width: 1600px; margin: 0 auto; }
+.workspace { display: grid; grid-template-columns: 276px minmax(0, 1fr); min-height: calc(100vh - 72px); max-width: 1600px; margin: 0 auto; }
 .sidebar { position: sticky; top: 72px; height: calc(100vh - 72px); overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; padding: 38px 22px 26px 34px; border-right: 1px solid var(--line-soft); background: var(--sidebar); }
 .sidebar-label { color: var(--muted-foreground); }
 .category-list { display: grid; gap: 4px; margin-top: 17px; }
@@ -267,9 +300,25 @@
 .settings-feed-detail { color: var(--muted-foreground); font-size: 10px; }
 .settings-feed-row > button { width: 31px; height: 31px; }
 .settings-feed-row > button svg { width: 15px; height: 15px; }
-.dialog-bottom { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 20px; color: var(--muted-foreground); font-size: 11px; }
+/* The footer stays in view while the feed list scrolls under it. */
+.dialog-bottom {
+  position: sticky;
+  bottom: -26px;
+  z-index: 1;
+  display: grid;
+  gap: 10px;
+  margin: 20px -26px -26px;
+  padding: 14px 26px 26px;
+  border-top: 1px solid var(--line-soft);
+  background: var(--background);
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
 .dialog-bottom button { gap: 7px; }
-.dialog-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-left: auto; }
+.dialog-actions { display: grid; gap: 8px; }
+.add-feed-button { width: 100%; height: 42px; font-size: 13px; }
+.dialog-transfer { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.dialog-transfer button { width: 100%; height: 32px; }
 .feed-form { display: grid; gap: 16px; margin-top: 12px; }
 .form-label { display: grid; gap: 7px; color: var(--foreground); font-size: 11px; font-weight: 600; }
 .form-label input { font-size: 13px; font-weight: 400; }
@@ -281,7 +330,7 @@
 @keyframes skeleton-pulse { to { opacity: .45; } }
 @keyframes story-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 960px) {
-  .workspace { grid-template-columns: 210px minmax(0, 1fr); }
+  .workspace { grid-template-columns: 232px minmax(0, 1fr); }
   .sidebar { padding-inline: 21px 14px; }
   .main-panel { padding-inline: 33px; }
   .content-head { align-items: flex-start; flex-direction: column; gap: 19px; }
@@ -313,7 +362,7 @@
   .story-title { font-size: 21px; }
   .story-open { opacity: .55; }
   .settings-dialog { width: calc(100% - 24px); max-width: 460px; padding: 22px 18px; }
-  .dialog-bottom { align-items: flex-start; flex-direction: column; }
+  .dialog-bottom { bottom: -22px; gap: 9px; margin: 16px -18px -22px; padding: 12px 18px 22px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }

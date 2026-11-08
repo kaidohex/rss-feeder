@@ -998,21 +998,8 @@ function SettingsDialog({
             <div className="dialog-bottom">
               <span>{feeds.length} publications in your library</span>
               <div className="dialog-actions">
-                <Button type="button" variant="ghost" size="sm" onClick={onExport}>
-                  <Download /> Export
-                </Button>
                 <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setImportError("");
-                    fileInputRef.current?.click();
-                  }}
-                >
-                  <Upload /> Import
-                </Button>
-                <Button
+                  className="add-feed-button"
                   variant="outline"
                   onClick={() => {
                     setEditingFeedId(null);
@@ -1022,6 +1009,22 @@ function SettingsDialog({
                 >
                   <Plus /> Add a feed
                 </Button>
+                <div className="dialog-transfer">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setImportError("");
+                      fileInputRef.current?.click();
+                    }}
+                  >
+                    <Upload /> Import
+                  </Button>
+                  <Button type="button" variant="ghost" size="sm" onClick={onExport}>
+                    <Download /> Export
+                  </Button>
+                </div>
               </div>
             </div>
             {importError && (
