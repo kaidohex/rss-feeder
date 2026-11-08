@@ -138,6 +138,15 @@ function plainText(html: string): string {
   return new DOMParser().parseFromString(html, "text/html").body.textContent?.trim() ?? "";
 }
 
+/**
+ * Some feeds (IndianExpress among them) put nothing but an image URL in the
+ * description. Rendering that as an excerpt is noise, so treat it as empty.
+ */
+function storyDescription(html: string): string {
+  const text = plainText(html);
+  return /^https?:\/\/\S+$/i.test(text) ? "" : text;
+}
+
 function safeImageUrl(value: unknown): string | undefined {
   return safeUrl(value, ["https:"]);
 }
@@ -207,7 +216,7 @@ export function parseFeedXml(xml: string, feed: FeedSource): RssArticle[] {
       id: `${feed.id}:${childValue(item, "guid") || childValue(item, "id") || childValue(item, "link") || String(index)}`,
       feedId: feed.id,
       title: plainText(childValue(item, "title") || "Untitled story"),
-      description: plainText(description ?? ""),
+      description: storyDescription(description ?? ""),
       link: safeLinkUrl(childValue(item, "link")) ?? safeLinkUrl(feed.url) ?? feed.url,
       publishedAt:
         childValue(item, "pubDate") || childValue(item, "published") || childValue(item, "updated"),
@@ -264,7 +273,7 @@ export async function fetchFeedArticles(feed: FeedSource): Promise<RssArticle[]>
         id: `${feed.id}:${String(item.guid || item.link || index)}`,
         feedId: feed.id,
         title: plainText(typeof item.title === "string" ? item.title : "Untitled story"),
-        description: plainText(description),
+        description: storyDescription(description),
         link: safeLinkUrl(item.link) ?? feed.url,
         publishedAt: date,
         source: feed.name,

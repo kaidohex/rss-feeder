@@ -258,4 +258,25 @@ describe("RSS article fetching", () => {
       category: "News",
     });
   });
+
+  it("drops descriptions that are only a URL or image link", () => {
+    const xml = [
+      '<?xml version="1.0"?>',
+      '<rss version="2.0"><channel><title>IndianExpress</title>',
+      "<item><title>Photo story</title><link>https://example.com/photo</link>",
+      "<description>https://images.indianexpress.com/2026/11/photo.jpg</description></item>",
+      "<item><title>Linked story</title><link>https://example.com/linked</link>",
+      '<description><![CDATA[<a href="https://example.com/x.jpg">https://example.com/x.jpg</a>]]></description></item>',
+      "<item><title>Real story</title><link>https://example.com/real</link>",
+      "<description>See https://example.com for the full report</description></item>",
+      "</channel></rss>",
+    ].join("");
+
+    const articles = parseFeedXml(xml, defaults[0]!);
+    expect(articles.map((article) => article.description)).toEqual([
+      "",
+      "",
+      "See https://example.com for the full report",
+    ]);
+  });
 });
