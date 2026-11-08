@@ -59,6 +59,80 @@ export function parseFeedSettings(value: string | null): SavedFeedSettings {
   }
 }
 
+let importCounter = 0;
+
+/**
+ * Reads a settings file exported from another Marginalia install, keeping only
+ * feed data that is safe to add: HTTPS URLs, unique ids, and known fields.
+ * Returns null when the file is not a feed settings export.
+ */
+export function parseImportedFeedSettings(value: string): SavedFeedSettings | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  const record = parsed as Partial<SavedFeedSettings>;
+  if (!Array.isArray(record.customFeeds) && !record.overrides) return null;
+
+  const seenUrls = new Set<string>();
+  const customFeeds: FeedSource[] = [];
+  for (const entry of Array.isArray(record.customFeeds) ? record.customFeeds : []) {
+    if (!entry || typeof entry !== "object") continue;
+    const candidate = entry as Partial<FeedSource>;
+    const url = typeof candidate.url === "string" ? safeUrl(candidate.url, ["https:"]) : undefined;
+    if (!url) continue;
+    const urlKey = url.replace(/\/+$/, "").toLowerCase();
+    if (seenUrls.has(urlKey)) continue;
+    seenUrls.add(urlKey);
+    const rawId = typeof candidate.id === "string" ? candidate.id : "";
+    customFeeds.push({
+      id: rawId.startsWith("custom-") ? rawId : `custom-import-${++importCounter}`,
+      name:
+        typeof candidate.name === "string" && candidate.name.trim() ? candidate.name.trim() : url,
+      category:
+        typeof candidate.category === "string" && candidate.category.trim()
+          ? candidate.category.trim()
+          : "Imported",
+      url,
+      enabled: candidate.enabled !== false,
+      custom: true,
+    });
+  }
+
+  const overrides: Record<string, Partial<FeedSource>> = {};
+  if (
+    record.overrides &&
+    typeof record.overrides === "object" &&
+    !Array.isArray(record.overrides)
+  ) {
+    for (const [id, raw] of Object.entries(record.overrides)) {
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+      const candidate = raw as Partial<FeedSource>;
+      const override: Partial<FeedSource> = {};
+      if (typeof candidate.name === "string" && candidate.name.trim()) {
+        override.name = candidate.name.trim();
+      }
+      if (typeof candidate.category === "string" && candidate.category.trim()) {
+        override.category = candidate.category.trim();
+      }
+      if (typeof candidate.enabled === "boolean") override.enabled = candidate.enabled;
+      const url =
+        typeof candidate.url === "string" ? safeUrl(candidate.url, ["https:"]) : undefined;
+      if (url) override.url = url;
+      if (Object.keys(override).length) overrides[id] = override;
+    }
+  }
+
+  const removedIds = Array.isArray(record.removedIds)
+    ? record.removedIds.filter((id): id is string => typeof id === "string")
+    : [];
+
+  return { customFeeds, overrides, removedIds };
+}
+
 function plainText(html: string): string {
   if (typeof DOMParser === "undefined") return html.replace(/<[^>]*>/g, " ").trim();
   return new DOMParser().parseFromString(html, "text/html").body.textContent?.trim() ?? "";

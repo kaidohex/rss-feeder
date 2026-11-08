@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { formatDistanceToNow } from "date-fns";
 import {
@@ -6,6 +6,7 @@ import {
   Check,
   ChevronDown,
   Clock3,
+  Download,
   ExternalLink,
   LoaderCircle,
   Moon,
@@ -16,6 +17,7 @@ import {
   Settings2,
   Sun,
   Trash2,
+  Upload,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -44,6 +46,7 @@ import {
   fetchFeedArticles,
   mergeFeeds,
   parseFeedSettings,
+  parseImportedFeedSettings,
   type FeedSource,
   type RssArticle,
   type SavedFeedSettings,
@@ -342,6 +345,56 @@ function Reader() {
     toast.success(`${feed.name} removed`);
   };
 
+  const exportFeeds = useCallback(() => {
+    const blob = new Blob([JSON.stringify(settings, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "marginalia-feeds.json";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast.success("Feeds exported");
+  }, [settings]);
+
+  const importFeeds = useCallback(
+    (incoming: SavedFeedSettings) => {
+      const normalize = (value: string) => value.trim().replace(/\/+$/, "").toLowerCase();
+      const knownUrls = new Set(feeds.map((feed) => normalize(feed.url)));
+      const newFeeds = incoming.customFeeds.filter((feed) => {
+        const key = normalize(feed.url);
+        if (knownUrls.has(key)) return false;
+        knownUrls.add(key);
+        return true;
+      });
+      const newOverrides = Object.fromEntries(
+        Object.entries(incoming.overrides).filter(
+          ([id]) => feeds.some((feed) => feed.id === id) && !(id in settings.overrides),
+        ),
+      );
+
+      if (!newFeeds.length && !Object.keys(newOverrides).length) {
+        toast.info("That file has no feeds you do not already have.");
+        return;
+      }
+
+      const nextSettings: SavedFeedSettings = {
+        customFeeds: [...settings.customFeeds, ...newFeeds],
+        overrides: { ...newOverrides, ...settings.overrides },
+        // Importing never removes the feeds you already have in this app.
+        removedIds: settings.removedIds,
+      };
+      setSettings(nextSettings);
+      void refresh(mergeFeeds(baseFeeds, nextSettings));
+      const count = newFeeds.length;
+      toast.success(
+        count ? `${count} feed${count === 1 ? "" : "s"} imported` : "Feed settings imported",
+      );
+    },
+    [baseFeeds, feeds, refresh, settings],
+  );
+
   const markAsRead = (article: RssArticle) => {
     setReadIds((current) => new Set(current).add(article.id));
     setReadingArticle(null);
@@ -591,6 +644,8 @@ function Reader() {
         onSave={saveFeed}
         onToggle={toggleFeed}
         onRemove={removeFeed}
+        onExport={exportFeeds}
+        onImport={importFeeds}
       />
       <Dialog
         open={readingArticle !== null}
@@ -712,6 +767,8 @@ function SettingsDialog({
   onSave,
   onToggle,
   onRemove,
+  onExport,
+  onImport,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -721,6 +778,8 @@ function SettingsDialog({
   onSave: (feed: FeedSource) => void;
   onToggle: (feed: FeedSource, enabled: boolean) => void;
   onRemove: (feed: FeedSource) => void;
+  onExport: () => void;
+  onImport: (settings: SavedFeedSettings) => void;
 }) {
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
@@ -728,6 +787,8 @@ function SettingsDialog({
   const [category, setCategory] = useState("");
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [error, setError] = useState("");
+  const [importError, setImportError] = useState("");
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const editingFeed = feeds.find((feed) => feed.id === editingFeedId);
 
   useEffect(() => {
@@ -755,6 +816,7 @@ function SettingsDialog({
     setCategory("");
     setCreatingCategory(false);
     setError("");
+    setImportError("");
   };
   const close = (nextOpen: boolean) => {
     onOpenChange(nextOpen);
@@ -786,6 +848,23 @@ function SettingsDialog({
       custom: editingFeed?.custom ?? true,
     });
     resetForm();
+  };
+
+  const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    try {
+      const parsed = parseImportedFeedSettings(await file.text());
+      if (!parsed) {
+        setImportError("That file is not a Marginalia feeds export.");
+        return;
+      }
+      setImportError("");
+      onImport(parsed);
+    } catch {
+      setImportError("That file could not be read.");
+    }
   };
 
   return (
@@ -918,17 +997,45 @@ function SettingsDialog({
             </div>
             <div className="dialog-bottom">
               <span>{feeds.length} publications in your library</span>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setEditingFeedId(null);
-                  setCreatingCategory(false);
-                  setShowForm(true);
-                }}
-              >
-                <Plus /> Add a feed
-              </Button>
+              <div className="dialog-actions">
+                <Button type="button" variant="ghost" size="sm" onClick={onExport}>
+                  <Download /> Export
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setImportError("");
+                    fileInputRef.current?.click();
+                  }}
+                >
+                  <Upload /> Import
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setEditingFeedId(null);
+                    setCreatingCategory(false);
+                    setShowForm(true);
+                  }}
+                >
+                  <Plus /> Add a feed
+                </Button>
+              </div>
             </div>
+            {importError && (
+              <p className="form-error" role="alert">
+                {importError}
+              </p>
+            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json,application/json"
+              className="hidden"
+              onChange={handleImportFile}
+            />
           </>
         )}
       </DialogContent>

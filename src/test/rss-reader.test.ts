@@ -5,6 +5,7 @@ import {
   mergeFeeds,
   parseFeedXml,
   parseFeedSettings,
+  parseImportedFeedSettings,
   type FeedSource,
 } from "@/lib/rss-reader";
 import { fetchFeedXml } from "@/lib/feed-server";
@@ -105,6 +106,66 @@ describe("RSS feed preferences", () => {
       enabled: false,
       custom: false,
     });
+  });
+
+  it("reads an exported settings file and keeps only safe feed data", () => {
+    const parsed = parseImportedFeedSettings(
+      JSON.stringify({
+        customFeeds: [
+          {
+            id: "custom-imported",
+            name: "  Imported feed  ",
+            category: "Culture",
+            url: "https://example.com/imported/",
+            enabled: false,
+          },
+          {
+            id: "custom-imported",
+            name: "Duplicate",
+            category: "Culture",
+            url: "https://example.com/imported",
+            enabled: true,
+          },
+          {
+            id: "plain-id",
+            category: "",
+            url: "https://example.com/no-name",
+            enabled: true,
+          },
+          { id: "bad-url", name: "Bad", category: "Misc", url: "http://example.com/feed" },
+        ],
+        overrides: {
+          world: { name: "World briefing", enabled: false, injected: "nope" },
+        },
+        removedIds: ["design", 42],
+      }),
+    );
+
+    expect(parsed).not.toBeNull();
+    expect(parsed?.customFeeds).toHaveLength(2);
+    expect(parsed?.customFeeds[0]).toMatchObject({
+      id: "custom-imported",
+      name: "Imported feed",
+      category: "Culture",
+      url: "https://example.com/imported/",
+      enabled: false,
+      custom: true,
+    });
+    expect(parsed?.customFeeds[1]).toMatchObject({
+      name: "https://example.com/no-name",
+      category: "Imported",
+      enabled: true,
+      custom: true,
+    });
+    expect(parsed?.customFeeds[1]?.id).toMatch(/^custom-import-/);
+    expect(parsed?.overrides).toEqual({ world: { name: "World briefing", enabled: false } });
+    expect(parsed?.removedIds).toEqual(["design"]);
+  });
+
+  it("rejects files that are not feed settings exports", () => {
+    expect(parseImportedFeedSettings("not-json")).toBeNull();
+    expect(parseImportedFeedSettings("[]")).toBeNull();
+    expect(parseImportedFeedSettings(JSON.stringify({ hello: "world" }))).toBeNull();
   });
 
   it("reads valid saved preferences and ignores malformed sections", () => {

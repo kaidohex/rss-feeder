@@ -10,12 +10,14 @@ import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 // The Electron build renders entirely on the client, so it skips the Nitro
 // server bundle and swaps the server-function feed fetcher for a plain
 // browser fetch (Electron relaxes CORS for the local app window).
-const desktop = process.env.MARGINALIA_DESKTOP === "1";
+const desktop = process.env["MARGINALIA_DESKTOP"] === "1";
 
-const desktopFeedFetch = fileURLToPath(new URL("./src/lib/feed-server.desktop.ts", import.meta.url));
+const desktopFeedFetch = fileURLToPath(
+  new URL("./src/lib/feed-server.desktop.ts", import.meta.url),
+);
 
 export default defineConfig({
-  nitro: desktop ? false : undefined,
+  ...(desktop ? { nitro: false } : {}),
   tanstackStart: desktop
     ? { spa: { enabled: true } }
     : {
@@ -23,11 +25,13 @@ export default defineConfig({
         // nitro/vite builds from this
         server: { entry: "server" },
       },
-  vite: desktop
+  ...(desktop
     ? {
-        resolve: {
-          alias: [{ find: /^\.\/feed-server$/, replacement: desktopFeedFetch }],
+        vite: {
+          resolve: {
+            alias: [{ find: /^\.\/feed-server$/, replacement: desktopFeedFetch }],
+          },
         },
       }
-    : undefined,
+    : {}),
 });
