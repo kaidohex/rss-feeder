@@ -94,8 +94,6 @@ jobs:
             - The build is unsigned, so Windows SmartScreen may ask for confirmation on first launch. Choose **More info → Run anyway**.
             - Moving feeds between the browser and desktop builds: use **Manage feeds → Export** in one and **Import** in the other.
             - Check the download with `SHA256SUMS.txt` if you want to be sure the archive arrived intact.
-
-            Full changelog: https://github.com/${{ github.repository }}/commits/${{ github.ref_name }}
           files: |
             Marginalia-*-windows-x64.zip
             SHA256SUMS.txt
