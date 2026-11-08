@@ -8,10 +8,11 @@ import {
   Scripts,
   type ErrorComponentProps,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { Toaster } from "@/components/ui/sonner";
 
 function NotFoundComponent() {
   return (
@@ -113,6 +114,22 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+function ThemedToaster() {
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+
+  // Sonner keeps its own styling, so it needs the app theme rather than the OS one.
+  useEffect(() => {
+    const root = document.documentElement;
+    const sync = () => setTheme(root.classList.contains("dark") ? "dark" : "light");
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
+
+  return <Toaster theme={theme} position="bottom-right" />;
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
@@ -120,6 +137,8 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
+      {/* Every toast.* call renders here; without it toasts are silent. */}
+      <ThemedToaster />
     </QueryClientProvider>
   );
 }

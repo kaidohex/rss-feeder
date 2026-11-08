@@ -8,6 +8,7 @@ import {
   Clock3,
   Download,
   ExternalLink,
+  Link2,
   LoaderCircle,
   Moon,
   Plus,
@@ -738,6 +739,32 @@ function Reader() {
   );
 }
 
+/** Clipboard access needs a secure origin; the fallback covers anything else. */
+async function copyToClipboard(value: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+      return true;
+    }
+  } catch {
+    // fall through to the textarea approach
+  }
+  try {
+    const area = document.createElement("textarea");
+    area.value = value;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.opacity = "0";
+    document.body.appendChild(area);
+    area.select();
+    const copied = document.execCommand("copy");
+    area.remove();
+    return copied;
+  } catch {
+    return false;
+  }
+}
+
 function StoryCard({
   article,
   index,
@@ -754,6 +781,11 @@ function StoryCard({
   const ageMs = date.getTime() ? Date.now() - date.getTime() : Number.POSITIVE_INFINITY;
   const isNew = ageMs < 24 * 60 * 60 * 1000;
   const excerpt = article.description.replace(/\s+/g, " ").slice(0, 185);
+  const shareStory = async () => {
+    const copied = await copyToClipboard(article.link);
+    if (copied) toast.success("Link copied to clipboard");
+    else toast.error("Could not copy the link");
+  };
   return (
     <article className={cn("story-card", index === 0 && "story-card-featured")}>
       <div className="story-card-top">
@@ -789,9 +821,20 @@ function StoryCard({
           <Clock3 size={13} />
           {time}
         </span>
-        <a href={article.link} target="_blank" rel="noreferrer" className="read-link">
-          Read story <ArrowUpRight size={14} />
-        </a>
+        <div className="story-actions">
+          <button
+            type="button"
+            className="share-link"
+            onClick={shareStory}
+            aria-label={`Copy link to ${article.title}`}
+            title="Copy link"
+          >
+            <Link2 size={13} /> Share
+          </button>
+          <a href={article.link} target="_blank" rel="noreferrer" className="read-link">
+            Read story <ArrowUpRight size={14} />
+          </a>
+        </div>
       </div>
     </article>
   );
