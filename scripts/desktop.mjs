@@ -14,7 +14,6 @@ const require = createRequire(import.meta.url);
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const viteBin = path.join(rootDir, "node_modules", "vite", "bin", "vite.js");
 const builderBin = path.join(rootDir, "node_modules", "electron-builder", "cli.js");
-const electronBin = require("electron");
 const mode = process.argv[2] ?? "dev";
 
 function runNode(args, options = {}) {
@@ -86,6 +85,10 @@ async function dev() {
   await waitForServer(devUrl);
   console.log(`\nOpening the desktop window at ${devUrl}\n`);
 
+  // Resolving the electron package downloads its binary the first time, which
+  // only the dev window needs; the packaging step ships electron-builder's own
+  // copy and must not depend on GitHub release downloads.
+  const electronBin = require("electron");
   const electron = runBinary(electronBin, ["."], {
     env: { ...process.env, MARGINALIA_DEV_URL: devUrl },
   });

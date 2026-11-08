@@ -1,2 +1,12 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# Keep the checked-out files byte-identical to the repository on every OS.
+# Prettier formats for LF, so a CRLF checkout fails `npm run lint` on Windows.
+* text=auto eol=lf
+
+*.ico binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.zip binary
+*.exe binary
