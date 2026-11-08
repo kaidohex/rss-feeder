@@ -298,8 +298,9 @@
 .settings-feed-info { display: grid; flex: 1; min-width: 0; gap: 4px; }
 .settings-feed-name { overflow: hidden; color: var(--foreground); font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .settings-feed-detail { color: var(--muted-foreground); font-size: 10px; }
-.settings-feed-row > button { width: 31px; height: 31px; }
-.settings-feed-row > button svg { width: 15px; height: 15px; }
+.settings-feed-row > button:not([role="switch"]) { width: 31px; height: 31px; }
+.settings-feed-row > button:not([role="switch"]) svg { width: 15px; height: 15px; }
+.settings-feed-row [role="switch"] { width: 36px; height: 20px; flex: 0 0 36px; }
 /* The footer stays in view while the feed list scrolls under it. */
 .dialog-bottom {
   position: sticky;
