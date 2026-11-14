@@ -1145,7 +1145,7 @@ function SettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={close}>
-      <DialogContent className="settings-dialog">
+      <DialogContent className={cn("settings-dialog", !showForm && "feeds-dialog")}>
         <DialogHeader>
           <div className="dialog-kicker">YOUR READING DESK</div>
           <DialogTitle>
