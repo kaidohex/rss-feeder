@@ -1,7 +1,7 @@
 {
   "name": "marginalia",
   "private": true,
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "A calm, personal reading desk for stories from the feeds you follow.",
   "author": "kaidohex <154259109+kaidohex@users.noreply.github.com>",
   "sideEffects": false,
