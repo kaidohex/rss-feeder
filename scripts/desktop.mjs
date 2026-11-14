@@ -112,8 +112,9 @@ if (mode === "dev") {
 } else if (mode === "build") {
   await build("--win --dir");
 } else if (mode === "build:linux") {
-  // AppImage is the portable Linux release artifact.
-  await build("--linux AppImage");
+  // AppImage is the portable Linux release artifact; publishing is the
+  // release workflow's job, so electron-builder must not do it itself.
+  await build("--linux AppImage --publish never");
 } else {
   console.error(`Unknown mode "${mode}". Use "dev", "build" or "build:linux".`);
   process.exit(1);
