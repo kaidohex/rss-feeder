@@ -22,8 +22,10 @@ win:
   icon: build/icon.ico
 
 linux:
-  target: dir
+  target: AppImage
   icon: build/icon.png
+  category: News
+  artifactName: Marginalia-${{ version }}-linux-x64.AppImage
   category: News
 
 mac:

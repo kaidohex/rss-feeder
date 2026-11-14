@@ -1,7 +1,8 @@
 // Desktop (Electron) dev and build helper.
 //
-//   node scripts/desktop.mjs dev     start Vite + open the Electron window
-//   node scripts/desktop.mjs build   build the SPA and package a portable folder
+//   node scripts/desktop.mjs dev           start Vite + open the Electron window
+//   node scripts/desktop.mjs build         build the SPA and package a portable folder
+//   node scripts/desktop.mjs build:linux   build the SPA and package an AppImage
 //
 // Keeping this in Node avoids extra tooling (concurrently, wait-on, cross-env)
 // and works the same from PowerShell, cmd, and bash.
@@ -98,19 +99,22 @@ async function dev() {
   });
 }
 
-async function build() {
+async function build(target) {
   await waitForExit(
     runNode([viteBin, "build"], { env: { ...process.env, MARGINALIA_DESKTOP: "1" } }),
     "vite build",
   );
-  await waitForExit(runNode([builderBin, "--win", "--dir"]), "electron-builder");
+  await waitForExit(runNode([builderBin, ...target.split(" ")]), "electron-builder");
 }
 
 if (mode === "dev") {
   await dev();
 } else if (mode === "build") {
-  await build();
+  await build("--win --dir");
+} else if (mode === "build:linux") {
+  // AppImage is the portable Linux release artifact.
+  await build("--linux AppImage");
 } else {
-  console.error(`Unknown mode "${mode}". Use "dev" or "build".`);
+  console.error(`Unknown mode "${mode}". Use "dev", "build" or "build:linux".`);
   process.exit(1);
 }

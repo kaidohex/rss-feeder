@@ -1,7 +1,7 @@
 {
   "name": "marginalia",
   "private": true,
-  "version": "1.2.1",
+  "version": "1.3.0",
   "description": "A calm, personal reading desk for stories from the feeds you follow.",
   "author": "kaidohex <154259109+kaidohex@users.noreply.github.com>",
   "sideEffects": false,
@@ -18,7 +18,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "desktop": "node scripts/desktop.mjs dev",
-    "desktop:build": "node scripts/desktop.mjs build"
+    "desktop:build": "node scripts/desktop.mjs build",
+    "desktop:build:linux": "node scripts/desktop.mjs build:linux"
   },
   "overrides": {
     "rolldown": "1.2.1"

@@ -31,8 +31,8 @@ jobs:
 
       - run: npm test
 
-  publish:
-    name: Build and publish
+  publish-windows:
+    name: Build Windows portable
     needs: verify
     runs-on: windows-latest
     steps:
@@ -68,13 +68,61 @@ jobs:
         shell: pwsh
         run: Compress-Archive -Path release/win-unpacked/* -DestinationPath "Marginalia-${{ github.ref_name }}-windows-x64.zip"
 
-      - name: Write checksums
-        shell: pwsh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-zip
+          path: Marginalia-*-windows-x64.zip
+          if-no-files-found: error
+
+  build-linux:
+    name: Build Linux AppImage
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run desktop:build:linux
+
+      - name: Check the packaged app
         run: |
-          $zip = Get-ChildItem "Marginalia-*-windows-x64.zip" | Select-Object -First 1
-          $hash = (Get-FileHash $zip.Name -Algorithm SHA256).Hash.ToLower()
-          "$hash  $($zip.Name)" | Set-Content -Path SHA256SUMS.txt -Encoding ascii
-          Get-Content SHA256SUMS.txt
+          appimage=$(ls release/*.AppImage)
+          test -n "$appimage" || { echo "Packaging did not produce an AppImage"; exit 1; }
+          test "$(stat -c%s "$appimage")" -gt 104857600 || { echo "AppImage looks truncated: $appimage"; exit 1; }
+          echo "Built $appimage"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-appimage
+          path: release/*.AppImage
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    needs: [publish-windows, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: "*"
+          merge-multiple: true
+          path: dist
+
+      - name: Write checksums
+        run: |
+          cd dist
+          for f in Marginalia-*; do
+            sha256sum "$f" >> SHA256SUMS.txt
+          done
+          cat SHA256SUMS.txt
 
       - uses: softprops/action-gh-release@v2
         with:
@@ -83,17 +131,24 @@ jobs:
           generate_release_notes: true
           fail_on_unmatched_files: true
           body: |
-            ### Portable Windows build
+            ### Portable builds — nothing to install
 
+            **Windows**
             1. Download the zip below and unzip it anywhere.
-            2. Run `Marginalia.exe` — nothing is installed, and no admin rights are needed.
-            3. Your feeds and settings live in `%APPDATA%\Marginalia`, so the folder can be moved or deleted freely.
+            2. Run `Marginalia.exe` — no admin rights needed.
+            3. Feeds and settings live in `%APPDATA%\Marginalia`.
+
+            **Linux**
+            1. Download the AppImage below.
+            2. `chmod +x Marginalia-*-linux-x64.AppImage && ./Marginalia-*-linux-x64.AppImage`
+            3. Feeds and settings live in `~/.config/Marginalia`.
 
             ### Good to know
 
-            - The build is unsigned, so Windows SmartScreen may ask for confirmation on first launch. Choose **More info → Run anyway**.
+            - The builds are unsigned, so Windows SmartScreen may ask for confirmation on first launch (**More info → Run anyway**). On Linux the AppImage may warn when it was not downloaded through a package manager.
             - Moving feeds between the browser and desktop builds: use **Manage feeds → Export** in one and **Import** in the other.
-            - Check the download with `SHA256SUMS.txt` if you want to be sure the archive arrived intact.
+            - Check any download with `SHA256SUMS.txt`.
           files: |
-            Marginalia-*-windows-x64.zip
-            SHA256SUMS.txt
+            dist/Marginalia-*-windows-x64.zip
+            dist/Marginalia-*-linux-x64.AppImage
+            dist/SHA256SUMS.txt
