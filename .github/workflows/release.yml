@@ -88,7 +88,10 @@ jobs:
 
       - run: npm ci
 
-      - run: npm run desktop:build:linux
+      - name: Build the AppImage
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: npm run desktop:build:linux
 
       - name: Check the packaged app
         run: |
