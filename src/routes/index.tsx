@@ -2,7 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { formatDistanceToNow } from "date-fns";
 import {
+  AlertCircle,
   ArrowUpRight,
+  Bookmark,
+  BookmarkCheck,
   Check,
   ChevronDown,
   Clock3,
@@ -61,6 +64,18 @@ import {
 import { fetchFeedXml } from "@/lib/feed-server";
 import { parseOpmlFeeds, toOpml, type OpmlFeed } from "@/lib/opml";
 import { checkForUpdates, type UpdateResult } from "@/lib/update-check";
+import {
+  FEED_HEALTH_KEY,
+  SAVED_IDS_KEY,
+  STORY_CACHE_KEY,
+  mergeFeedArticles,
+  parseCachedArticles,
+  parseFeedHealth,
+  parseSavedIds,
+  searchStories,
+  trimStoryCache,
+  type FeedHealth,
+} from "@/lib/reading-store";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -86,6 +101,14 @@ type FeedStatus = Record<string, "loading" | "error">;
 const SETTINGS_KEY = "marginalia-feed-settings";
 const THEME_KEY = "marginalia-theme";
 const AUTO_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
+/** Internal name for the saved-stories view; never collides with a category. */
+const SAVED_VIEW = "__saved__";
+
+function lastSuccessLabel(timestamp?: number): string {
+  return timestamp
+    ? formatDistanceToNow(new Date(timestamp), { addSuffix: true })
+    : "never fetched";
+}
 
 function Reader() {
   const [baseFeeds, setBaseFeeds] = useState<FeedSource[]>([]);
@@ -104,6 +127,8 @@ function Reader() {
   const [readingArticle, setReadingArticle] = useState<RssArticle | null>(null);
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const [readIds, setReadIds] = useState<ReadonlySet<string>>(new Set<string>());
+  const [savedIds, setSavedIds] = useState<ReadonlySet<string>>(new Set<string>());
+  const [health, setHealth] = useState<FeedHealth>({});
 
   const feeds = useMemo(() => mergeFeeds(baseFeeds, settings), [baseFeeds, settings]);
   const categories = useMemo(
@@ -128,29 +153,46 @@ function Reader() {
           feed.enabled &&
           (selectedSourceId
             ? feed.id === selectedSourceId
-            : selectedCategory === "All stories" || feed.category === selectedCategory),
+            : selectedCategory === "All stories" ||
+              selectedCategory === SAVED_VIEW ||
+              feed.category === selectedCategory),
       ),
     [feeds, selectedCategory, selectedSourceId],
   );
-  const visibleArticles = useMemo(
+  const savedArticles = useMemo(
     () =>
-      libraryArticles
-        .filter((article) =>
-          selectedSourceId
-            ? article.feedId === selectedSourceId
-            : selectedCategory === "All stories" || article.category === selectedCategory,
-        )
-        .filter(
-          (article) =>
-            !query ||
-            `${article.title} ${article.description} ${article.source}`
-              .toLowerCase()
-              .includes(query.toLowerCase()),
-        )
-        .filter((article) => !readIds.has(article.id))
+      articles
+        .filter((article) => savedIds.has(article.id))
         .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()),
-    [libraryArticles, query, selectedCategory, selectedSourceId, readIds],
+    [articles, savedIds],
   );
+  const trimmedQuery = query.trim();
+  const searching = trimmedQuery.length > 0;
+  // Search runs over the local archive, not just the stories loaded this session.
+  const searchResults = useMemo(
+    () => (searching ? searchStories(articles, trimmedQuery) : []),
+    [articles, searching, trimmedQuery],
+  );
+  const visibleArticles = useMemo(() => {
+    if (searching) return searchResults;
+    if (selectedCategory === SAVED_VIEW) return savedArticles;
+    return libraryArticles
+      .filter((article) =>
+        selectedSourceId
+          ? article.feedId === selectedSourceId
+          : selectedCategory === "All stories" || article.category === selectedCategory,
+      )
+      .filter((article) => !readIds.has(article.id))
+      .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+  }, [
+    libraryArticles,
+    readIds,
+    savedArticles,
+    searchResults,
+    searching,
+    selectedCategory,
+    selectedSourceId,
+  ]);
   const loading = Object.keys(feedStatus).some((id) => feedStatus[id] === "loading");
   const failedFeeds = feeds.filter((feed) => feedErrors[feed.id]);
   const hasError = failedFeeds.length > 0;
@@ -160,14 +202,14 @@ function Reader() {
       ? failedNames[0]
       : `${failedNames.slice(0, -1).join(", ")} and ${failedNames.at(-1)}`;
 
-  const refresh = useCallback(async (sources: FeedSource[]) => {
+  const refresh = useCallback(async (sources: FeedSource[]): Promise<Record<string, string>> => {
     const enabled = sources.filter((feed) => feed.enabled);
     if (!enabled.length) {
       setArticles([]);
       setFeedStatus({});
       setFeedErrors({});
       setLastUpdated(new Date());
-      return;
+      return {};
     }
     setFeedStatus(Object.fromEntries(enabled.map((feed) => [feed.id, "loading"])));
     const settled = await Promise.allSettled(enabled.map((feed) => fetchFeedArticles(feed)));
@@ -187,23 +229,42 @@ function Reader() {
           result.reason instanceof Error ? result.reason.message : "The feed could not be loaded.";
       }
     });
-    setArticles((current) => [
-      ...current.filter((article) => !successfulIds.has(article.feedId)),
-      ...nextArticles,
-    ]);
+    setArticles((current) => mergeFeedArticles(current, nextArticles, successfulIds));
     setFeedStatus(nextStatus);
     setFeedErrors(nextErrors);
+    const checkedAt = Date.now();
+    setHealth((current) => {
+      const next: FeedHealth = { ...current };
+      for (const feed of enabled) {
+        if (successfulIds.has(feed.id)) {
+          next[feed.id] = { lastSuccess: checkedAt, lastChecked: checkedAt };
+          continue;
+        }
+        const error = nextErrors[feed.id];
+        if (error) next[feed.id] = { ...next[feed.id], lastError: error, lastChecked: checkedAt };
+      }
+      return next;
+    });
     setLastUpdated(new Date());
     if (Object.keys(nextErrors).length) {
       const names = enabled.filter((feed) => nextErrors[feed.id]).map((feed) => feed.name);
       toast.error(`${names.join(", ")} could not be refreshed.`);
     }
+    return nextErrors;
   }, []);
+
+  const retryFeed = async (feed: FeedSource) => {
+    const errors = await refresh([feed]);
+    if (!errors[feed.id]) toast.success(`${feed.name} is back`);
+  };
 
   useEffect(() => {
     let cancelled = false;
     const storedSettings = parseFeedSettings(window.localStorage.getItem(SETTINGS_KEY));
     setSettings(storedSettings);
+    setArticles(parseCachedArticles(window.localStorage.getItem(STORY_CACHE_KEY)));
+    setSavedIds(parseSavedIds(window.localStorage.getItem(SAVED_IDS_KEY)));
+    setHealth(parseFeedHealth(window.localStorage.getItem(FEED_HEALTH_KEY)));
     const savedTheme = window.localStorage.getItem(THEME_KEY);
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     const initialTheme =
@@ -239,7 +300,30 @@ function Reader() {
   }, [isReady, settings]);
 
   useEffect(() => {
-    if (!categories.includes(selectedCategory)) setSelectedCategory("All stories");
+    if (!isReady) return;
+    window.localStorage.setItem(SAVED_IDS_KEY, JSON.stringify([...savedIds]));
+  }, [isReady, savedIds]);
+
+  useEffect(() => {
+    if (!isReady) return;
+    window.localStorage.setItem(FEED_HEALTH_KEY, JSON.stringify(health));
+  }, [isReady, health]);
+
+  useEffect(() => {
+    if (!isReady) return;
+    // Keep a rolling archive for search, but always keep saved stories.
+    const cache = trimStoryCache(articles, savedIds);
+    try {
+      window.localStorage.setItem(STORY_CACHE_KEY, JSON.stringify(cache));
+    } catch {
+      // A full quota should never break reading; the in-memory list still works.
+    }
+  }, [isReady, articles, savedIds]);
+
+  useEffect(() => {
+    if (selectedCategory !== SAVED_VIEW && !categories.includes(selectedCategory)) {
+      setSelectedCategory("All stories");
+    }
   }, [categories, selectedCategory]);
 
   useEffect(() => {
@@ -260,15 +344,6 @@ function Reader() {
     }, AUTO_REFRESH_INTERVAL_MS);
     return () => window.clearInterval(intervalId);
   }, [isReady, refresh, feeds]);
-
-  const chooseCategory = (value: string) => {
-    if (value === "__create__") {
-      setEditingFeedId(null);
-      setSettingsOpen(true);
-      return;
-    }
-    setSelectedCategory(value);
-  };
 
   const toggleTheme = () => {
     const nextTheme = theme === "light" ? "dark" : "light";
@@ -438,6 +513,24 @@ function Reader() {
     setReadingArticle(null);
   };
 
+  const toggleSaved = (article: RssArticle) => {
+    const wasSaved = savedIds.has(article.id);
+    setSavedIds((current) => {
+      const next = new Set(current);
+      if (wasSaved) next.delete(article.id);
+      else next.add(article.id);
+      return next;
+    });
+    if (wasSaved) toast.success("Removed from saved stories");
+    else toast.success("Saved for later");
+  };
+
+  const openCategory = (category: string) => {
+    setSelectedSourceId(null);
+    setSelectedCategory(category);
+    setQuery("");
+  };
+
   const updatedLabel = lastUpdated
     ? formatDistanceToNow(lastUpdated, { addSuffix: true })
     : "Just now";
@@ -491,10 +584,7 @@ function Reader() {
                     "category-tab",
                     selectedCategory === category && "category-tab-active",
                   )}
-                  onClick={() => {
-                    setSelectedSourceId(null);
-                    setSelectedCategory(category);
-                  }}
+                  onClick={() => openCategory(category)}
                   aria-current={selectedCategory === category ? "page" : undefined}
                 >
                   <span className="category-dot" /> <span>{category}</span>
@@ -502,6 +592,17 @@ function Reader() {
                 </button>
               );
             })}
+            <button
+              className={cn(
+                "category-tab",
+                selectedCategory === SAVED_VIEW && "category-tab-active",
+              )}
+              onClick={() => openCategory(SAVED_VIEW)}
+              aria-current={selectedCategory === SAVED_VIEW ? "page" : undefined}
+            >
+              <Bookmark size={13} className="saved-tab-icon" /> <span>Saved</span>
+              <span className="category-count">{savedArticles.length || "—"}</span>
+            </button>
           </nav>
           <div className="sidebar-separator" />
           <div className="sidebar-label source-heading">
@@ -521,18 +622,28 @@ function Reader() {
           <div className="source-list">
             {feeds
               .filter((feed) => feed.enabled)
-              .map((feed) => (
-                <button
-                  className="source-row"
-                  key={feed.id}
-                  onClick={() => setSelectedSourceId(feed.id)}
-                  title={`Show only ${feed.name} stories`}
-                >
-                  <span className="source-avatar">{feed.name.slice(0, 1)}</span>
-                  <span className="source-name">{feed.name}</span>
-                  <span className="source-dot" />
-                </button>
-              ))}
+              .map((feed) => {
+                const failing = Boolean(health[feed.id]?.lastError);
+                return (
+                  <button
+                    className="source-row"
+                    key={feed.id}
+                    onClick={() => {
+                      setSelectedSourceId(feed.id);
+                      setQuery("");
+                    }}
+                    title={
+                      failing
+                        ? `${feed.name} is not updating. Last success ${lastSuccessLabel(health[feed.id]?.lastSuccess)}.`
+                        : `Show only ${feed.name} stories`
+                    }
+                  >
+                    <span className="source-avatar">{feed.name.slice(0, 1)}</span>
+                    <span className="source-name">{feed.name}</span>
+                    <span className={cn("source-dot", failing && "source-dot-error")} />
+                  </button>
+                );
+              })}
           </div>
           <div className="sidebar-note">
             <span className="live-pip" /> <span>Quietly collecting your reads</span>
@@ -546,13 +657,23 @@ function Reader() {
                 <span className="eyebrow-rule" /> THE DAILY EDITION
               </div>
               <h1>
-                {selectedSourceId
-                  ? (feeds.find((feed) => feed.id === selectedSourceId)?.name ?? selectedCategory)
-                  : selectedCategory === "All stories"
-                    ? "Your reading desk"
-                    : selectedCategory}
+                {searching
+                  ? "Search results"
+                  : selectedSourceId
+                    ? (feeds.find((feed) => feed.id === selectedSourceId)?.name ?? selectedCategory)
+                    : selectedCategory === "All stories"
+                      ? "Your reading desk"
+                      : selectedCategory === SAVED_VIEW
+                        ? "Saved stories"
+                        : selectedCategory}
               </h1>
-              <p>A considered collection of the stories you follow.</p>
+              <p>
+                {searching
+                  ? `Matches for “${trimmedQuery}” in your saved story archive.`
+                  : selectedCategory === SAVED_VIEW
+                    ? "Stories you kept for later, even after they leave the feed."
+                    : "A considered collection of the stories you follow."}
+              </p>
             </div>
             <div className="head-tools">
               <div className={cn("search-box", searchOpen && "search-box-active")}>
@@ -564,7 +685,7 @@ function Reader() {
                     if (!query) setSearchOpen(false);
                   }}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Find a story..."
+                  placeholder="Search your archive..."
                   aria-label="Search stories"
                 />
                 {query && (
@@ -634,6 +755,8 @@ function Reader() {
                   key={`${article.id}-${article.source}`}
                   article={article}
                   index={index}
+                  saved={savedIds.has(article.id)}
+                  onToggleSaved={toggleSaved}
                   onOpen={setReadingArticle}
                 />
               ))}
@@ -641,23 +764,27 @@ function Reader() {
           ) : (
             <div className="empty-state">
               <div className="empty-icon">
-                <Rss size={21} />
+                {selectedCategory === SAVED_VIEW ? <Bookmark size={21} /> : <Rss size={21} />}
               </div>
               <h2>
-                {query
+                {searching
                   ? "No stories found"
-                  : activeFeeds.length
-                    ? "Nothing new to read"
-                    : "Your library is quiet"}
+                  : selectedCategory === SAVED_VIEW
+                    ? "Nothing saved yet"
+                    : activeFeeds.length
+                      ? "Nothing new to read"
+                      : "Your library is quiet"}
               </h2>
               <p>
-                {query
-                  ? "Try another title, source, or keyword."
-                  : activeFeeds.length
-                    ? "There are no stories in this category right now."
-                    : "Add a feed to start collecting stories here."}
+                {searching
+                  ? "Try another title, source, or keyword. Search covers your whole local archive."
+                  : selectedCategory === SAVED_VIEW
+                    ? "Use the Save button on any story to keep it here for later."
+                    : activeFeeds.length
+                      ? "There are no stories in this category right now."
+                      : "Add a feed to start collecting stories here."}
               </p>
-              {!activeFeeds.length && (
+              {!activeFeeds.length && selectedCategory !== SAVED_VIEW && (
                 <Button variant="outline" onClick={() => setSettingsOpen(true)}>
                   <Plus /> Add your first feed
                 </Button>
@@ -686,6 +813,8 @@ function Reader() {
         onExportOpml={exportOpml}
         onImport={importFeeds}
         onImportOpml={importOpml}
+        health={health}
+        onRetry={(feed) => void retryFeed(feed)}
       />
       <Dialog
         open={readingArticle !== null}
@@ -714,9 +843,27 @@ function Reader() {
                   : null}
               </div>
               <div className="reader-actions">
-                <Button variant="outline" size="sm" onClick={() => markAsRead(readingArticle)}>
-                  <Check /> Mark as read
-                </Button>
+                <div className="reader-actions-left">
+                  <Button variant="outline" size="sm" onClick={() => markAsRead(readingArticle)}>
+                    <Check /> Mark as read
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => toggleSaved(readingArticle)}
+                    aria-pressed={savedIds.has(readingArticle.id)}
+                  >
+                    {savedIds.has(readingArticle.id) ? (
+                      <>
+                        <BookmarkCheck /> Saved
+                      </>
+                    ) : (
+                      <>
+                        <Bookmark /> Save
+                      </>
+                    )}
+                  </Button>
+                </div>
                 <div className="reader-actions-right">
                   <a
                     href={readingArticle.link}
@@ -768,10 +915,14 @@ async function copyToClipboard(value: string): Promise<boolean> {
 function StoryCard({
   article,
   index,
+  saved,
+  onToggleSaved,
   onOpen,
 }: {
   article: RssArticle;
   index: number;
+  saved: boolean;
+  onToggleSaved: (article: RssArticle) => void;
   onOpen?: (article: RssArticle) => void;
 }) {
   const date = new Date(article.publishedAt);
@@ -824,6 +975,17 @@ function StoryCard({
         <div className="story-actions">
           <button
             type="button"
+            className={cn("share-link", saved && "share-link-saved")}
+            onClick={() => onToggleSaved(article)}
+            aria-label={saved ? `Remove ${article.title} from saved` : `Save ${article.title}`}
+            aria-pressed={saved}
+            title={saved ? "Remove from saved" : "Save for later"}
+          >
+            {saved ? <BookmarkCheck size={13} /> : <Bookmark size={13} />}
+            {saved ? "Saved" : "Save"}
+          </button>
+          <button
+            type="button"
             className="share-link"
             onClick={shareStory}
             aria-label={`Copy link to ${article.title}`}
@@ -853,6 +1015,8 @@ function SettingsDialog({
   onExportOpml,
   onImport,
   onImportOpml,
+  health,
+  onRetry,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -866,6 +1030,8 @@ function SettingsDialog({
   onExportOpml: () => void;
   onImport: (settings: SavedFeedSettings) => void;
   onImportOpml: (entries: OpmlFeed[]) => void;
+  health: FeedHealth;
+  onRetry: (feed: FeedSource) => void;
 }) {
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
@@ -1068,42 +1234,67 @@ function SettingsDialog({
         ) : (
           <>
             <div className="settings-feed-list">
-              {feeds.map((feed) => (
-                <div className="settings-feed-row" key={feed.id}>
-                  <Switch
-                    checked={feed.enabled}
-                    onCheckedChange={(checked) => onToggle(feed, checked)}
-                    aria-label={`${feed.enabled ? "Disable" : "Enable"} ${feed.name}`}
-                  />
-                  <div className="settings-feed-info">
-                    <span className="settings-feed-name">{feed.name}</span>
-                    <span className="settings-feed-detail">
-                      {feed.category}
-                      {feed.custom ? " · Custom feed" : " · Included feed"}
-                    </span>
+              {feeds.map((feed) => {
+                const entry = health[feed.id];
+                const failing = Boolean(entry?.lastError);
+                return (
+                  <div className="settings-feed-row" key={feed.id}>
+                    <Switch
+                      checked={feed.enabled}
+                      onCheckedChange={(checked) => onToggle(feed, checked)}
+                      aria-label={`${feed.enabled ? "Disable" : "Enable"} ${feed.name}`}
+                    />
+                    <div className="settings-feed-info">
+                      <span className="settings-feed-name">{feed.name}</span>
+                      <span className="settings-feed-detail">
+                        {feed.category}
+                        {feed.custom ? " · Custom feed" : " · Included feed"}
+                      </span>
+                      {failing && (
+                        <span
+                          className="feed-health feed-health-error"
+                          title={entry?.lastError}
+                          role="status"
+                        >
+                          <AlertCircle size={11} />
+                          Not updating · last success {lastSuccessLabel(entry?.lastSuccess)}
+                        </span>
+                      )}
+                    </div>
+                    {failing && feed.enabled && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Retry ${feed.name}`}
+                        title="Retry this feed"
+                        onClick={() => onRetry(feed)}
+                      >
+                        <RefreshCw />
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Edit ${feed.name}`}
+                      title="Edit feed"
+                      onClick={() => {
+                        setEditingFeedId(feed.id);
+                      }}
+                    >
+                      <Settings2 />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Remove ${feed.name}`}
+                      title="Remove feed"
+                      onClick={() => onRemove(feed)}
+                    >
+                      <Trash2 />
+                    </Button>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Edit ${feed.name}`}
-                    title="Edit feed"
-                    onClick={() => {
-                      setEditingFeedId(feed.id);
-                    }}
-                  >
-                    <Settings2 />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Remove ${feed.name}`}
-                    title="Remove feed"
-                    onClick={() => onRemove(feed)}
-                  >
-                    <Trash2 />
-                  </Button>
-                </div>
-              ))}
+                );
+              })}
             </div>
             {importError && (
               <p className="form-error form-error-import" role="alert">
