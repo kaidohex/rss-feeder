@@ -275,7 +275,7 @@
 }
 .workspace {
   display: grid;
-  grid-template-columns: 276px minmax(0, 1fr);
+  grid-template-columns: 320px minmax(0, 1fr);
   min-height: calc(100vh - 72px);
   max-width: 1600px;
   margin: 0 auto;
@@ -285,12 +285,17 @@
   top: 72px;
   height: calc(100vh - 72px);
   overflow-y: auto;
+  overflow-x: hidden;
   overscroll-behavior: contain;
+  scrollbar-width: none;
   display: flex;
   flex-direction: column;
   padding: 38px 22px 26px 34px;
   border-right: 1px solid var(--line-soft);
   background: var(--sidebar);
+}
+.sidebar::-webkit-scrollbar {
+  display: none;
 }
 .sidebar-label {
   color: var(--muted-foreground);
@@ -1043,7 +1048,7 @@
 }
 @media (max-width: 960px) {
   .workspace {
-    grid-template-columns: 232px minmax(0, 1fr);
+    grid-template-columns: 280px minmax(0, 1fr);
   }
   .sidebar {
     padding-inline: 21px 14px;
